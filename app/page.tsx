@@ -53,6 +53,17 @@ export default function Home() {
     selectedSongRef.current = selectedSong;
     volumeRef.current = volume;
 
+    // Reset wallpaper on component unmount
+    useEffect(() => {
+        return () => {
+            if (isBrowserTauri) {
+                getTauri().then(mod =>
+                    mod.invoke('clear_wallpaper')
+                ).catch(() => {});
+            }
+        };
+    }, []);
+
     // F12 Developer Tools Listener
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
@@ -89,15 +100,18 @@ export default function Home() {
             setMetadata(result);
             if (result.duration) setDuration(result.duration);
 
-            if (result.cover_b64 && result.cover_mime && isBrowserTauri) {
-                mod.invoke('set_wallpaper', {
-                    coverB64: result.cover_b64,
-                    coverMime: result.cover_mime,
-                }).catch((e: unknown) => {
-                    const msg = String(e);
-                    console.error('Gagal set wallpaper:', msg);
-                    setDebugError(`Wallpaper error: ${msg}`);
-                });
+            if (isBrowserTauri) {
+                if (result.cover_b64) {
+                    mod.invoke('set_wallpaper', {
+                        coverB64: result.cover_b64,
+                    }).catch((e: unknown) => {
+                        const msg = String(e);
+                        console.error('Gagal set wallpaper:', msg);
+                        setDebugError(`Wallpaper error: ${msg}`);
+                    });
+                } else {
+                    mod.invoke('clear_wallpaper').catch(() => {});
+                }
             }
         } catch {
             setMetadata(null);
