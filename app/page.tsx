@@ -88,6 +88,17 @@ export default function Home() {
             const result = await mod.invoke<SongMetadata>('get_metadata', { filePath: _filePath });
             setMetadata(result);
             if (result.duration) setDuration(result.duration);
+
+            if (result.cover_b64 && result.cover_mime && isBrowserTauri) {
+                mod.invoke('set_wallpaper', {
+                    coverB64: result.cover_b64,
+                    coverMime: result.cover_mime,
+                }).catch((e: unknown) => {
+                    const msg = String(e);
+                    console.error('Gagal set wallpaper:', msg);
+                    setDebugError(`Wallpaper error: ${msg}`);
+                });
+            }
         } catch {
             setMetadata(null);
         }

@@ -3,12 +3,26 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+
 use base64::Engine;
 use lofty::file::AudioFile;
 use lofty::file::TaggedFileExt;
 use lofty::read_from_path;
 use lofty::tag::Accessor;
 use serde::Serialize;
+
+#[cfg(windows)]
+#[link(name = "user32")]
+extern "system" {
+    fn SystemParametersInfoW(
+        uiAction: u32,
+        uiParam: u32,
+        pvParam: *const u16,
+        fWinIni: u32,
+    ) -> i32;
+}
 
 #[derive(Serialize)]
 struct FileEntry {
@@ -129,10 +143,49 @@ fn get_metadata(file_path: String) -> Result<SongMetadata, String> {
     })
 }
 
+#[tauri::command]
+fn set_wallpaper(cover_b64: String, _cover_mime: String) -> Result<(), String> {
+    let engine = base64::engine::general_purpose::STANDARD;
+    let data = engine.decode(&cover_b64).map_err(|e| format!("Base64 decode error: {}", e))?;
+
+    let img = image::load_from_memory(&data)
+        .map_err(|e| format!("Gagal decode image: {}", e))?;
+
+    let temp_dir = std::env::temp_dir();
+    let bmp_path = temp_dir.join("music-app-wallpaper.bmp");
+
+    img.save_with_format(&bmp_path, image::ImageFormat::Bmp)
+        .map_err(|e| format!("Gagal save BMP: {}", e))?;
+
+    let path_wide: Vec<u16> = OsStr::new(&bmp_path.to_string_lossy().as_ref())
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    const SPI_SETDESKWALLPAPER: u32 = 0x0014;
+    const SPIF_UPDATEINIFILE: u32 = 0x01;
+    const SPIF_SENDCHANGE: u32 = 0x02;
+
+    let result = unsafe {
+        SystemParametersInfoW(
+            SPI_SETDESKWALLPAPER,
+            0,
+            path_wide.as_ptr(),
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE,
+        )
+    };
+
+    if result != 0 {
+        Ok(())
+    } else {
+        Err("Gagal set wallpaper (SystemParametersInfoW returned 0)".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![list_files, get_metadata])
+        .invoke_handler(tauri::generate_handler![list_files, get_metadata, set_wallpaper])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
