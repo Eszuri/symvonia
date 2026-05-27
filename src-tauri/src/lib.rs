@@ -12,6 +12,7 @@ use lofty::file::TaggedFileExt;
 use lofty::read_from_path;
 use lofty::tag::Accessor;
 use serde::Serialize;
+use tauri::Manager;
 
 #[cfg(windows)]
 #[link(name = "user32")]
@@ -225,6 +226,12 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            let window = app.get_webview_window("main").unwrap();
+            let icon_bytes = include_bytes!("../icons/icon.png");
+            let img = image::load_from_memory(icon_bytes).unwrap().to_rgba8();
+            let (w, h) = (img.width(), img.height());
+            let icon = tauri::image::Image::new(img.as_raw(), w, h);
+            window.set_icon(icon).unwrap();
             Ok(())
         })
         .build(tauri::generate_context!())
