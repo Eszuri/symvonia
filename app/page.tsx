@@ -46,6 +46,7 @@ export default function Home() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const filesRef = useRef<FileEntry[]>([]);
     const selectedSongRef = useRef<FileEntry | null>(null);
+    const playlistRef = useRef<FileEntry[]>([]);
     const volumeRef = useRef<number>(volume);
 
     filesRef.current = files;
@@ -144,6 +145,10 @@ export default function Home() {
         const audio = audioRef.current;
         if (!audio) return;
 
+        if (filesRef.current.some(f => f.path === file.path)) {
+            playlistRef.current = filesRef.current.filter(f => !f.is_dir);
+        }
+
         audio.pause();
 
         try {
@@ -161,33 +166,50 @@ export default function Home() {
             setSelectedSong(file);
             loadMetadata(file.path);
         } catch (e) {
+            if (e instanceof DOMException && e.name === 'AbortError') return;
             console.error('Gagal play:', e);
         }
     }, [loadMetadata]);
 
+    const resetPlayer = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current.removeAttribute('src');
+            audioRef.current.load();
+        }
+        setSelectedSong(null);
+        setMetadata(null);
+        setCurrentTime(0);
+        setDuration(0);
+        setIsPlaying(false);
+        playlistRef.current = [];
+        if (isBrowserTauri) {
+            getTauri().then(mod => mod.invoke('clear_wallpaper')).catch(() => {});
+        }
+    }, []);
+
     const playNext = useCallback(() => {
         const current = selectedSongRef.current;
-        const list = filesRef.current;
-        if (!current) return;
+        const list = playlistRef.current;
+        if (!current || list.length === 0) return;
 
-        const audioFiles = list.filter(f => !f.is_dir);
-        const idx = audioFiles.findIndex(f => f.path === current.path);
-        const nextFile = audioFiles[idx + 1];
+        const idx = list.findIndex(f => f.path === current.path);
+        const nextFile = idx >= 0 ? list[idx + 1] : list[0];
         if (nextFile) {
             playSong(nextFile);
         } else {
-            audioRef.current?.pause();
+            resetPlayer();
         }
-    }, [playSong]);
+    }, [playSong, resetPlayer]);
 
     const playPrev = useCallback(() => {
         const current = selectedSongRef.current;
-        const list = filesRef.current;
-        if (!current) return;
+        const list = playlistRef.current;
+        if (!current || list.length === 0) return;
 
-        const audioFiles = list.filter(f => !f.is_dir);
-        const idx = audioFiles.findIndex(f => f.path === current.path);
-        const prevFile = audioFiles[idx - 1];
+        const idx = list.findIndex(f => f.path === current.path);
+        const prevFile = idx >= 0 ? list[idx - 1] : list[list.length - 1];
         if (prevFile) {
             playSong(prevFile);
         }
