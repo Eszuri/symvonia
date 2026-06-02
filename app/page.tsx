@@ -6,9 +6,10 @@ import PlayerPanel, { SongMetadata } from './components/PlayerPanel';
 import SeekBar from './components/SeekBar';
 import PlaybackControls from './components/PlaybackControls';
 import VolumeControl from './components/VolumeControl';
+import ConfirmDialog from './components/ConfirmDialog';
 
-const ROOT_PATH = 'D:\\Anime_Ost';
 const isBrowserTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const FOLDER_STORAGE_KEY = 'music-app-folder';
 
 interface TauriCore {
     invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -25,16 +26,15 @@ function getTauri(): Promise<TauriCore> {
     });
 }
 
-const MOCK_FILES: FileEntry[] = [
-    { name: 'Folder Anime', path: 'D:\\Anime_Ost\\Folder Anime', is_dir: true, ext: '', mtime: 100 },
-    { name: '01 - Opening.mp3', path: 'D:\\Anime_Ost\\01 - Opening.mp3', is_dir: false, ext: 'mp3', mtime: 200 },
-    { name: '02 - Ending.mp3', path: 'D:\\Anime_Ost\\02 - Ending.mp3', is_dir: false, ext: 'mp3', mtime: 300 },
-    { name: '03 - OST Theme.flac', path: 'D:\\Anime_Ost\\03 - OST Theme.flac', is_dir: false, ext: 'flac', mtime: 400 },
-];
+function loadSavedFolder(): string | null {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem(FOLDER_STORAGE_KEY);
+}
 
 export default function Home() {
+    const [musicFolder, setMusicFolderState] = useState<string | null>(null);
     const [files, setFiles] = useState<FileEntry[]>([]);
-    const [currentPath, setCurrentPath] = useState(ROOT_PATH);
+    const [currentPath, setCurrentPath] = useState<string | null>(null);
     const [selectedSong, setSelectedSong] = useState<FileEntry | null>(null);
     const [metadata, setMetadata] = useState<SongMetadata | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -48,12 +48,27 @@ export default function Home() {
     const selectedSongRef = useRef<FileEntry | null>(null);
     const volumeRef = useRef<number>(volume);
 
-    // Sync state values to refs for callback stability
     filesRef.current = files;
     selectedSongRef.current = selectedSong;
     volumeRef.current = volume;
 
-    // Reset wallpaper on component unmount
+    const setMusicFolder = useCallback((folder: string | null) => {
+        setMusicFolderState(folder);
+        if (folder) {
+            window.localStorage.setItem(FOLDER_STORAGE_KEY, folder);
+        } else {
+            window.localStorage.removeItem(FOLDER_STORAGE_KEY);
+        }
+    }, []);
+
+    useEffect(() => {
+        const saved = loadSavedFolder();
+        if (saved) {
+            setMusicFolderState(saved);
+            setCurrentPath(saved);
+        }
+    }, []);
+
     useEffect(() => {
         return () => {
             if (isBrowserTauri) {
@@ -64,7 +79,6 @@ export default function Home() {
         };
     }, []);
 
-    // F12 Developer Tools Listener
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
             if (e.key === 'F12') {
@@ -77,7 +91,6 @@ export default function Home() {
         return () => window.removeEventListener('keydown', handleKey);
     }, []);
 
-    // Load directory files list
     const loadFiles = useCallback(async (dirPath: string) => {
         try {
             const mod = await getTauri();
@@ -88,11 +101,10 @@ export default function Home() {
             const msg = String(e);
             setDebugError(msg);
             console.error('list_files error:', e);
-            setFiles(MOCK_FILES);
+            setFiles([]);
         }
     }, []);
 
-    // Load track metadata from Tauri backend
     const loadMetadata = useCallback(async (_filePath: string) => {
         try {
             const mod = await getTauri();
@@ -118,12 +130,14 @@ export default function Home() {
         }
     }, []);
 
-    // Fetch files list on current path change
     useEffect(() => {
-        loadFiles(currentPath);
+        if (currentPath) {
+            loadFiles(currentPath);
+        } else {
+            setFiles([]);
+        }
     }, [currentPath, loadFiles]);
 
-    // Main play track function
     const playSong = useCallback(async (file: FileEntry) => {
         if (file.is_dir) return;
 
@@ -151,7 +165,6 @@ export default function Home() {
         }
     }, [loadMetadata]);
 
-    // Handle play next track
     const playNext = useCallback(() => {
         const current = selectedSongRef.current;
         const list = filesRef.current;
@@ -163,12 +176,10 @@ export default function Home() {
         if (nextFile) {
             playSong(nextFile);
         } else {
-            // Reached the end of folder playlist
             audioRef.current?.pause();
         }
     }, [playSong]);
 
-    // Handle play previous track
     const playPrev = useCallback(() => {
         const current = selectedSongRef.current;
         const list = filesRef.current;
@@ -182,18 +193,15 @@ export default function Home() {
         }
     }, [playSong]);
 
-    // Keep playNext reference up-to-date for HTMLAudioElement event listener
     const playNextRef = useRef(playNext);
     useEffect(() => {
         playNextRef.current = playNext;
     }, [playNext]);
 
-    // Initialize event-driven HTMLAudioElement
     useEffect(() => {
         const audio = new Audio();
         audioRef.current = audio;
 
-        // Synchronize initial volume setting
         audio.volume = volumeRef.current;
 
         const handlePlay = () => setIsPlaying(true);
@@ -225,7 +233,6 @@ export default function Home() {
         };
     }, []);
 
-    // Play or pause the audio track
     const togglePlayPause = useCallback(() => {
         const audio = audioRef.current;
         if (!audio || !audio.src) return;
@@ -237,7 +244,6 @@ export default function Home() {
         }
     }, []);
 
-    // Change volume level
     const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const v = parseFloat(e.target.value);
         setVolume(v);
@@ -246,7 +252,6 @@ export default function Home() {
         }
     }, []);
 
-    // Seek playback position
     const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const t = parseFloat(e.target.value);
         setCurrentTime(t);
@@ -255,21 +260,60 @@ export default function Home() {
         }
     }, []);
 
-    // Go up one directory level
     const goUp = useCallback(() => {
+        if (!currentPath || !musicFolder) return;
         const parent = currentPath.replace(/\\/g, '/').split('/').slice(0, -1).join('\\');
-        const parentPath = parent || ROOT_PATH;
-        if (parentPath.length >= ROOT_PATH.length) {
-            setCurrentPath(parentPath);
+        if (parent.length >= musicFolder.length) {
+            setCurrentPath(parent);
         }
-    }, [currentPath]);
+    }, [currentPath, musicFolder]);
 
-    const relativePath = currentPath.replace(ROOT_PATH, '') || '\\';
-    const displayPath = `D:\\Anime_Ost${relativePath}`;
+    const [pendingFolderChange, setPendingFolderChange] = useState(false);
+
+    const doPickFolder = useCallback(async () => {
+        try {
+            const mod = await getTauri();
+            const result = await mod.invoke<string | null>('pick_folder');
+            if (result) {
+                setMusicFolder(result);
+                setCurrentPath(result);
+                setSelectedSong(null);
+                setMetadata(null);
+            }
+        } catch (e) {
+            const msg = String(e);
+            console.error('pick_folder error:', e);
+            setDebugError(`Folder picker error: ${msg}`);
+        }
+    }, [setMusicFolder]);
+
+    const handlePickFolder = useCallback(async () => {
+        if (!isBrowserTauri) {
+            setDebugError('Folder picker hanya tersedia di aplikasi desktop');
+            return;
+        }
+        if (isPlaying) {
+            setPendingFolderChange(true);
+            return;
+        }
+        await doPickFolder();
+    }, [isPlaying, doPickFolder]);
+
+    const confirmFolderChange = useCallback(() => {
+        setPendingFolderChange(false);
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
+        setIsPlaying(false);
+        setCurrentTime(0);
+        doPickFolder();
+    }, [doPickFolder]);
+
+    const displayPath = currentPath || '';
 
     return (
         <div className="h-full flex flex-col bg-linear-to-b from-zinc-950 to-black text-zinc-100 select-none font-sans">
-            {/* Header */}
             <header className="flex items-center justify-center px-5 py-3 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm relative">
                 <div className="flex items-center gap-3 absolute left-5">
                     <span className="text-xl">🎵</span>
@@ -281,52 +325,104 @@ export default function Home() {
                 </span>
             </header>
 
-            {/* Main */}
             <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar penjelajah folder */}
-                <FolderExplorer
-                    files={files}
-                    selectedSong={selectedSong}
-                    displayPath={displayPath}
-                    debugError={debugError}
-                    goUp={goUp}
-                    setCurrentPath={setCurrentPath}
-                    playSong={playSong}
-                />
-
-                {/* Player Panel */}
-                <main className="flex-1 flex items-center justify-center p-6">
-                    <div className="flex flex-col items-center gap-5 w-full max-w-2xl">
-                        {/* Cover dan Metadata */}
-                        <PlayerPanel
-                            metadata={metadata}
+                {!musicFolder ? (
+                    <NoFolderEmptyState onPickFolder={handlePickFolder} />
+                ) : (
+                    <>
+                        <FolderExplorer
+                            files={files}
                             selectedSong={selectedSong}
+                            displayPath={displayPath}
+                            debugError={debugError}
+                            goUp={goUp}
+                            setCurrentPath={setCurrentPath}
+                            playSong={playSong}
+                            onChangeFolder={handlePickFolder}
+                            musicFolder={musicFolder}
                         />
 
-                        {/* Progress Timeline */}
-                        <SeekBar
-                            currentTime={currentTime}
-                            duration={duration}
-                            handleSeek={handleSeek}
-                        />
-
-                        {/* Controls */}
-                        <PlaybackControls
-                            selectedSong={selectedSong}
-                            isPlaying={isPlaying}
-                            playPrev={playPrev}
-                            togglePlayPause={togglePlayPause}
-                            playNext={playNext}
-                        />
-
-                        {/* Volume Control */}
-                        <VolumeControl
-                            volume={volume}
-                            handleVolumeChange={handleVolumeChange}
-                        />
-                    </div>
-                </main>
+                        <main className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
+                            {files.length === 0 ? (
+                                <EmptyFolderState folder={displayPath} />
+                            ) : (
+                                <div className="flex flex-col items-center gap-5 w-full max-w-2xl">
+                                    <PlayerPanel
+                                        metadata={metadata}
+                                        selectedSong={selectedSong}
+                                    />
+                                    <SeekBar
+                                        currentTime={currentTime}
+                                        duration={duration}
+                                        handleSeek={handleSeek}
+                                    />
+                                    <PlaybackControls
+                                        selectedSong={selectedSong}
+                                        isPlaying={isPlaying}
+                                        playPrev={playPrev}
+                                        togglePlayPause={togglePlayPause}
+                                        playNext={playNext}
+                                    />
+                                    <VolumeControl
+                                        volume={volume}
+                                        handleVolumeChange={handleVolumeChange}
+                                    />
+                                </div>
+                            )}
+                        </main>
+                    </>
+                )}
             </div>
+            <ConfirmDialog
+                open={pendingFolderChange}
+                title="Ganti Folder Musik?"
+                message="Musik sedang diputar. Mengganti folder akan menghentikan pemutaran saat ini. Lanjutkan?"
+                confirmLabel="Ganti & Hentikan"
+                cancelLabel="Batal"
+                onConfirm={confirmFolderChange}
+                onCancel={() => setPendingFolderChange(false)}
+            />
+        </div>
+    );
+}
+
+function NoFolderEmptyState({ onPickFolder }: { onPickFolder: () => void }) {
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <div className="w-24 h-24 rounded-3xl bg-zinc-900/80 border border-zinc-800/50 flex items-center justify-center mb-6 shadow-2xl shadow-black/50">
+                <span className="text-5xl opacity-30">📁</span>
+            </div>
+            <h2 className="text-2xl font-semibold text-zinc-200 mb-2">Selamat Datang di My Music</h2>
+            <p className="text-sm text-zinc-500 max-w-md mb-8 leading-relaxed">
+                Pilih folder tempat kamu menyimpan koleksi musik untuk mulai memutar. Aplikasi akan membaca metadata
+                dan cover art dari file audio secara otomatis.
+            </p>
+            <button
+                onClick={onPickFolder}
+                className="flex items-center gap-2.5 px-6 py-3 bg-green-500 hover:bg-green-400 text-zinc-950 font-semibold rounded-xl transition-all active:scale-95 cursor-pointer shadow-lg shadow-green-500/20"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                </svg>
+                Pilih Folder Musik
+            </button>
+        </div>
+    );
+}
+
+function EmptyFolderState({ folder }: { folder: string }) {
+    return (
+        <div className="flex flex-col items-center justify-center text-center max-w-md">
+            <div className="w-20 h-20 rounded-2xl bg-zinc-900/60 border border-zinc-800/50 flex items-center justify-center mb-5">
+                <span className="text-4xl opacity-30">🎵</span>
+            </div>
+            <h3 className="text-lg font-semibold text-zinc-200 mb-1.5">Folder Kosong</h3>
+            <p className="text-sm text-zinc-500 leading-relaxed mb-1">
+                Tidak ada file audio di folder ini.
+            </p>
+            <p className="text-xs text-zinc-600 font-mono truncate max-w-full px-4" title={folder}>
+                {folder}
+            </p>
         </div>
     );
 }

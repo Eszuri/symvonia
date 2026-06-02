@@ -45,6 +45,16 @@ struct SongMetadata {
 }
 
 #[tauri::command]
+async fn pick_folder() -> Result<Option<String>, String> {
+    let folder = rfd::AsyncFileDialog::new()
+        .set_title("Pilih folder musik")
+        .pick_folder()
+        .await;
+
+    Ok(folder.map(|f| f.path().to_string_lossy().to_string()))
+}
+
+#[tauri::command]
 fn list_files(path: String) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| format!("Gagal membaca folder: {}", e))?;
 
@@ -216,7 +226,8 @@ pub fn run() {
             list_files,
             get_metadata,
             set_wallpaper,
-            clear_wallpaper
+            clear_wallpaper,
+            pick_folder
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
