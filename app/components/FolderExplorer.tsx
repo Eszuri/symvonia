@@ -103,8 +103,10 @@ export default function FolderExplorer({
             <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-800/30">
                 <button
                     onClick={goUp}
-                    className="flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 
-        text-zinc-400 hover:text-zinc-100 transition-all active:scale-95 cursor-pointer"
+                    title="Ke folder induk"
+                    aria-hidden={displayPath === musicFolder}
+                    className={`flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 
+        text-zinc-400 hover:text-zinc-100 transition-all active:scale-95 shrink-0 ${displayPath === musicFolder ? 'invisible pointer-events-none' : 'cursor-pointer'}`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="m15 18-6-6 6-6" />
