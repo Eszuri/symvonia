@@ -21,6 +21,7 @@ const SORT_DIR_KEY = 'music-app-sort-dir';
 const THEME_KEY = 'music-app-theme';
 const ACCENT_KEY = 'music-app-accent';
 const CUSTOM_ACCENT_KEY = 'music-app-custom-accent';
+const WALLPAPER_KEY = 'music-app-wallpaper';
 
 interface TauriCore {
     invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -61,6 +62,7 @@ export default function Home() {
     const [theme, setThemeState] = useState('dark');
     const [accentColor, setAccentColorState] = useState('green');
     const [customAccentHex, setCustomAccentHexState] = useState('#22c55e');
+    const [defaultWallpaper, setDefaultWallpaperState] = useState<string | null>(null);
     const [resetSidebarToken, setResetSidebarToken] = useState(0);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -84,6 +86,15 @@ export default function Home() {
             window.localStorage.setItem(FOLDER_STORAGE_KEY, folder);
         } else {
             window.localStorage.removeItem(FOLDER_STORAGE_KEY);
+        }
+    }, []);
+
+    const setDefaultWallpaper = useCallback((path: string | null) => {
+        setDefaultWallpaperState(path);
+        if (path) {
+            window.localStorage.setItem(WALLPAPER_KEY, path);
+        } else {
+            window.localStorage.removeItem(WALLPAPER_KEY);
         }
     }, []);
 
@@ -113,6 +124,8 @@ export default function Home() {
         if (ac) setAccentColorState(ac);
         const ca = window.localStorage.getItem(CUSTOM_ACCENT_KEY);
         if (ca) setCustomAccentHexState(ca);
+        const wp = window.localStorage.getItem(WALLPAPER_KEY);
+        if (wp) setDefaultWallpaperState(wp);
     }, []);
 
     useEffect(() => {
@@ -168,6 +181,13 @@ export default function Home() {
         if (typeof window === 'undefined') return;
         window.localStorage.setItem(CUSTOM_ACCENT_KEY, customAccentHex);
     }, [customAccentHex]);
+
+    useEffect(() => {
+        if (!isBrowserTauri) return;
+        getTauri().then(mod => {
+            mod.invoke('set_default_wallpaper_path', { path: defaultWallpaper });
+        }).catch(() => {});
+    }, [defaultWallpaper]);
 
     useEffect(() => {
         return () => {
@@ -474,6 +494,24 @@ export default function Home() {
         await doPickFolder();
     }, [isPlaying, doPickFolder]);
 
+    const handlePickWallpaper = useCallback(async () => {
+        if (!isBrowserTauri) {
+            setDebugError('Gambar picker hanya tersedia di aplikasi desktop');
+            return;
+        }
+        try {
+            const mod = await getTauri();
+            const result = await mod.invoke<string | null>('pick_wallpaper');
+            if (result) {
+                setDefaultWallpaper(result);
+            }
+        } catch (e) {
+            const msg = String(e);
+            console.error('pick_wallpaper error:', e);
+            setDebugError(`Wallpaper picker error: ${msg}`);
+        }
+    }, [setDefaultWallpaper]);
+
     const confirmFolderChange = useCallback(() => {
         setPendingFolderChange(false);
         if (audioRef.current) {
@@ -629,6 +667,9 @@ export default function Home() {
                 setAutoWallpaper={setAutoWallpaperState}
                 resetOnClose={resetOnClose}
                 setResetOnClose={setResetOnCloseState}
+                defaultWallpaper={defaultWallpaper}
+                onPickWallpaper={handlePickWallpaper}
+                onClearWallpaper={() => setDefaultWallpaper(null)}
                 folderSort={folderSort}
                 setFolderSort={setFolderSortState}
                 fileSort={fileSort}

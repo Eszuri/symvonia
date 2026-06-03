@@ -66,6 +66,9 @@ interface SettingsModalProps {
     setAutoWallpaper: (v: boolean) => void;
     resetOnClose: boolean;
     setResetOnClose: (v: boolean) => void;
+    defaultWallpaper: string | null;
+    onPickWallpaper: () => void;
+    onClearWallpaper: () => void;
     folderSort: string;
     setFolderSort: (v: string) => void;
     fileSort: string;
@@ -90,6 +93,9 @@ export default function SettingsModal({
     setAutoWallpaper,
     resetOnClose,
     setResetOnClose,
+    defaultWallpaper,
+    onPickWallpaper,
+    onClearWallpaper,
     folderSort,
     setFolderSort,
     fileSort,
@@ -189,6 +195,9 @@ export default function SettingsModal({
                                 setAutoWallpaper={setAutoWallpaper}
                                 resetOnClose={resetOnClose}
                                 setResetOnClose={setResetOnClose}
+                                defaultWallpaper={defaultWallpaper}
+                                onPickWallpaper={onPickWallpaper}
+                                onClearWallpaper={onClearWallpaper}
                                 accentColor={accentColor}
                             />
                         )}
@@ -229,6 +238,9 @@ function GeneralSection({
     setAutoWallpaper,
     resetOnClose,
     setResetOnClose,
+    defaultWallpaper,
+    onPickWallpaper,
+    onClearWallpaper,
     accentColor,
 }: {
     musicFolder: string | null;
@@ -237,6 +249,9 @@ function GeneralSection({
     setAutoWallpaper: (v: boolean) => void;
     resetOnClose: boolean;
     setResetOnClose: (v: boolean) => void;
+    defaultWallpaper: string | null;
+    onPickWallpaper: () => void;
+    onClearWallpaper: () => void;
     accentColor: string;
 }) {
     const accent = getAccent(accentColor);
@@ -247,17 +262,18 @@ function GeneralSection({
                 description="Folder tempat koleksi musik kamu disimpan"
             >
                 <div className="flex items-center gap-2 max-w-[260px]">
-                    <div
-                        className="text-xs text-zinc-400 font-mono truncate flex-1"
-                        title={musicFolder ?? ''}
-                    >
-                        {musicFolder ?? '—'}
-                    </div>
+                    {musicFolder ? (
+                        <div className="text-xs text-zinc-400 font-mono truncate flex-1" title={musicFolder}>
+                            {musicFolder}
+                        </div>
+                    ) : (
+                        <div className="text-xs text-zinc-600 flex-1" />
+                    )}
                     <button
                         onClick={onChangeFolder}
                         className="px-2.5 py-1 rounded-md text-[11px] font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 transition-colors cursor-pointer shrink-0"
                     >
-                        Ganti
+                        {musicFolder ? 'Ganti' : 'Set Folder'}
                     </button>
                 </div>
             </SettingRow>
@@ -268,10 +284,43 @@ function GeneralSection({
                 <ToggleStub checked={autoWallpaper} onChange={setAutoWallpaper} accent={accent} />
             </SettingRow>
             <SettingRow
+                title="Wallpaper Default"
+                description="Gambar yang akan digunakan sebagai wallpaper saat reset atau tutup aplikasi"
+            >
+                <div className="flex items-center gap-2 max-w-[260px]">
+                    {defaultWallpaper ? (
+                        <div className="text-xs text-zinc-400 font-mono truncate flex-1" title={defaultWallpaper}>
+                            {defaultWallpaper.split('\\').pop()?.split('/').pop()}
+                        </div>
+                    ) : (
+                        <div className="text-xs text-zinc-600 flex-1" />
+                    )}
+                    <button
+                        onClick={onPickWallpaper}
+                        className="px-2.5 py-1 rounded-md text-[11px] font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 transition-colors cursor-pointer shrink-0"
+                    >
+                        {defaultWallpaper ? 'Ganti' : 'Set Wallpaper'}
+                    </button>
+                    {defaultWallpaper && (
+                        <button
+                            onClick={onClearWallpaper}
+                            className="px-2 py-1 rounded-md text-[11px] font-medium text-red-400 bg-zinc-800/60 hover:bg-red-900/40 border border-zinc-700/50 transition-colors cursor-pointer shrink-0"
+                        >
+                            Hapus
+                        </button>
+                    )}
+                </div>
+            </SettingRow>
+            <SettingRow
                 title="Reset Wallpaper on Close"
                 description="Kembalikan wallpaper ke default saat aplikasi ditutup"
             >
-                <ToggleStub checked={resetOnClose} onChange={setResetOnClose} accent={accent} />
+                <div className="flex flex-col items-end gap-1">
+                    <ToggleStub checked={resetOnClose} onChange={setResetOnClose} disabled={!defaultWallpaper} accent={accent} />
+                    {!defaultWallpaper && (
+                        <span className="text-[10px] text-zinc-600 whitespace-nowrap">Set wallpaper default dulu</span>
+                    )}
+                </div>
             </SettingRow>
         </div>
     );
@@ -476,15 +525,16 @@ function SettingRow({
     );
 }
 
-function ToggleStub({ checked = false, onChange, accent }: { checked?: boolean; onChange?: (v: boolean) => void; accent: Record<string, string> }) {
+function ToggleStub({ checked = false, onChange, accent, disabled }: { checked?: boolean; onChange?: (v: boolean) => void; accent: Record<string, string>; disabled?: boolean }) {
     return (
         <button
             type="button"
             role="switch"
             aria-checked={checked}
+            disabled={disabled}
             onClick={() => onChange?.(!checked)}
-            className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${checked ? accent.bg500 : 'bg-zinc-700'
-                }`}
+            className={`w-9 h-5 rounded-full relative transition-colors ${checked ? accent.bg500 : 'bg-zinc-700'
+                } ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
         >
             <div
                 className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'

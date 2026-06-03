@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 #[cfg(windows)]
@@ -36,6 +37,7 @@ struct FileEntry {
 }
 
 static RESET_ON_CLOSE: AtomicBool = AtomicBool::new(true);
+static DEFAULT_WALLPAPER_PATH: Mutex<Option<String>> = Mutex::new(None);
 
 #[tauri::command]
 fn set_reset_on_close(enabled: bool) {
@@ -60,6 +62,29 @@ async fn pick_folder() -> Result<Option<String>, String> {
         .await;
 
     Ok(folder.map(|f| f.path().to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+async fn pick_wallpaper() -> Result<Option<String>, String> {
+    let file = rfd::AsyncFileDialog::new()
+        .set_title("Pilih gambar wallpaper default")
+        .add_filter("Images", &["png", "jpg", "jpeg", "bmp", "webp"])
+        .pick_file()
+        .await;
+    Ok(file.map(|f| f.path().to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn set_default_wallpaper_path(path: Option<String>) -> Result<(), String> {
+    let mut guard = DEFAULT_WALLPAPER_PATH.lock().map_err(|e| e.to_string())?;
+    *guard = path;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_default_wallpaper_path() -> Result<Option<String>, String> {
+    let guard = DEFAULT_WALLPAPER_PATH.lock().map_err(|e| e.to_string())?;
+    Ok(guard.clone())
 }
 
 #[tauri::command]
@@ -197,22 +222,27 @@ fn apply_wallpaper(bmp_path: &Path) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-fn generate_default_wallpaper() -> Result<std::path::PathBuf, String> {
-    let temp_dir = std::env::temp_dir();
-    let path = temp_dir.join("mw-def.bmp");
-
-    if path.exists() {
-        return Ok(path);
+fn clear_wallpaper_internal() -> Result<(), String> {
+    let guard = DEFAULT_WALLPAPER_PATH.lock().map_err(|e| e.to_string())?;
+    if let Some(img_path) = guard.as_ref() {
+        let path = Path::new(img_path);
+        if !path.exists() {
+            return Err("File wallpaper default tidak ditemukan".to_string());
+        }
+        let img = image::open(path).map_err(|e| format!("Gagal buka gambar: {}", e))?;
+        let temp_dir = std::env::temp_dir();
+        let bmp_path = temp_dir.join("mw-def.bmp");
+        img.save_with_format(&bmp_path, image::ImageFormat::Bmp)
+            .map_err(|e| format!("Gagal save BMP: {}", e))?;
+        apply_wallpaper(&bmp_path)
+    } else {
+        Ok(())
     }
+}
 
-    let data = include_bytes!("../default.png");
-    let img = image::load_from_memory(data)
-        .map_err(|e| format!("Gagal decode default.png: {}", e))?;
-
-    img.save_with_format(&path, image::ImageFormat::Bmp)
-        .map_err(|e| format!("Gagal save default BMP: {}", e))?;
-
-    Ok(path)
+#[tauri::command]
+fn clear_wallpaper() -> Result<(), String> {
+    clear_wallpaper_internal()
 }
 
 #[tauri::command]
@@ -232,12 +262,6 @@ fn set_wallpaper(cover_b64: String) -> Result<(), String> {
     apply_wallpaper(&bmp_path)
 }
 
-#[tauri::command]
-fn clear_wallpaper() -> Result<(), String> {
-    let path = generate_default_wallpaper()?;
-    apply_wallpaper(&path)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -247,6 +271,9 @@ pub fn run() {
             set_wallpaper,
             clear_wallpaper,
             pick_folder,
+            pick_wallpaper,
+            set_default_wallpaper_path,
+            get_default_wallpaper_path,
             set_reset_on_close
         ])
         .setup(|app| {
@@ -272,8 +299,11 @@ pub fn run() {
         #[cfg(windows)]
         if let tauri::RunEvent::Exit = event {
             if RESET_ON_CLOSE.load(Ordering::SeqCst) {
-                if let Ok(path) = generate_default_wallpaper() {
-                    let _ = apply_wallpaper(&path);
+                let has_default = DEFAULT_WALLPAPER_PATH.lock()
+                    .map(|p| p.is_some())
+                    .unwrap_or(false);
+                if has_default {
+                    let _ = clear_wallpaper_internal();
                 }
             }
         }
