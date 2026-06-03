@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import {FileEntry} from './FolderExplorer';
 
 interface PlaybackControlsProps {
@@ -19,29 +20,38 @@ export default function PlaybackControls({
 }: PlaybackControlsProps) {
     return (
         <div className="flex items-center gap-6">
-            <button
+            <motion.button
                 onClick={playPrev}
                 disabled={!selectedSong}
-                className="text-zinc-400 hover:text-zinc-100 transition-colors text-2xl disabled:opacity-30 cursor-pointer"
+                whileHover={selectedSong ? { scale: 1.1 } : {}}
+                whileTap={selectedSong ? { scale: 0.9 } : {}}
+                transition={{ duration: 0.12 }}
+                className="text-zinc-400 hover:text-zinc-100 text-2xl disabled:opacity-30 cursor-pointer"
             >
                 ⏮
-            </button>
-            <button
+            </motion.button>
+            <motion.button
                 onClick={togglePlayPause}
                 disabled={!selectedSong}
+                whileHover={selectedSong ? { scale: 1.06 } : {}}
+                whileTap={selectedSong ? { scale: 0.94 } : {}}
+                transition={{ duration: 0.12 }}
                 className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-400 disabled:bg-zinc-800
                   disabled:text-zinc-600 text-zinc-950 flex items-center justify-center text-2xl
-                  transition-all shadow-lg shadow-green-500/25 disabled:shadow-none cursor-pointer"
+                  shadow-lg shadow-green-500/25 disabled:shadow-none cursor-pointer"
             >
                 {isPlaying ? '⏸' : '▶'}
-            </button>
-            <button
+            </motion.button>
+            <motion.button
                 onClick={playNext}
                 disabled={!selectedSong}
-                className="text-zinc-400 hover:text-zinc-100 transition-colors text-2xl disabled:opacity-30 cursor-pointer"
+                whileHover={selectedSong ? { scale: 1.1 } : {}}
+                whileTap={selectedSong ? { scale: 0.9 } : {}}
+                transition={{ duration: 0.12 }}
+                className="text-zinc-400 hover:text-zinc-100 text-2xl disabled:opacity-30 cursor-pointer"
             >
                 ⏭
-            </button>
+            </motion.button>
         </div>
     );
 }

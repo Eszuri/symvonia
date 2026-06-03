@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import FolderExplorer, { FileEntry } from './components/FolderExplorer';
 import PlayerPanel, { SongMetadata } from './components/PlayerPanel';
 import SeekBar from './components/SeekBar';
 import PlaybackControls from './components/PlaybackControls';
 import VolumeControl from './components/VolumeControl';
 import ConfirmDialog from './components/ConfirmDialog';
+import SettingsModal from './components/SettingsModal';
 
 const isBrowserTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const FOLDER_STORAGE_KEY = 'music-app-folder';
@@ -291,6 +293,7 @@ export default function Home() {
     }, [currentPath, musicFolder]);
 
     const [pendingFolderChange, setPendingFolderChange] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     const doPickFolder = useCallback(async () => {
         try {
@@ -337,21 +340,72 @@ export default function Home() {
     return (
         <div className="h-full flex flex-col bg-linear-to-b from-zinc-950 to-black text-zinc-100 select-none font-sans">
             <header className="flex items-center justify-center px-5 py-3 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm relative">
-                <div className="flex items-center gap-3 absolute left-5">
-                    <span className="text-xl">🎵</span>
-                </div>
-                <h1 className="text-lg font-bold tracking-tight text-zinc-100">My Music</h1>
-                <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full absolute right-5 ${isPlaying ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/30'
-                    }`}>
-                    {isPlaying ? '● Playing' : '● Stopped'}
-                </span>
+                <motion.button
+                    onClick={() => setSettingsOpen(true)}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium cursor-pointer"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Setting
+                </motion.button>
+                <h1 className="text-lg font-bold tracking-tight text-zinc-100 truncate max-w-[40%]">
+                    {selectedSong
+                        ? (metadata?.title || selectedSong.name.replace(/\.[^.]+$/, ''))
+                        : 'My Music'}
+                </h1>
+                <motion.span
+                    key={isPlaying ? 'playing' : 'stopped'}
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full absolute right-5 flex items-center gap-1.5 ${isPlaying ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/30'
+                        }`}
+                >
+                    {isPlaying ? (
+                        <>
+                            <motion.span
+                                className="inline-block w-1.5 h-1.5 rounded-full bg-green-400"
+                                animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                            />
+                            Playing
+                        </>
+                    ) : (
+                        <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                            Stopped
+                        </>
+                    )}
+                </motion.span>
             </header>
 
             <div className="flex flex-1 overflow-hidden">
+                <AnimatePresence mode="wait">
                 {!musicFolder ? (
-                    <NoFolderEmptyState onPickFolder={handlePickFolder} />
+                    <motion.div
+                        key="no-folder"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.25 }}
+                        className="flex-1"
+                    >
+                        <NoFolderEmptyState onPickFolder={handlePickFolder} />
+                    </motion.div>
                 ) : (
-                    <>
+                    <motion.div
+                        key="player-area"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.25 }}
+                        className="flex flex-1 overflow-hidden"
+                    >
                         <FolderExplorer
                             files={files}
                             selectedSong={selectedSong}
@@ -392,8 +446,9 @@ export default function Home() {
                                 </div>
                             )}
                         </main>
-                    </>
+                    </motion.div>
                 )}
+                </AnimatePresence>
             </div>
             <ConfirmDialog
                 open={pendingFolderChange}
@@ -403,6 +458,10 @@ export default function Home() {
                 cancelLabel="Batal"
                 onConfirm={confirmFolderChange}
                 onCancel={() => setPendingFolderChange(false)}
+            />
+            <SettingsModal
+                open={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
             />
         </div>
     );
@@ -419,15 +478,18 @@ function NoFolderEmptyState({ onPickFolder }: { onPickFolder: () => void }) {
                 Pilih folder tempat kamu menyimpan koleksi musik untuk mulai memutar. Aplikasi akan membaca metadata
                 dan cover art dari file audio secara otomatis.
             </p>
-            <button
+            <motion.button
                 onClick={onPickFolder}
-                className="flex items-center gap-2.5 px-6 py-3 bg-green-500 hover:bg-green-400 text-zinc-950 font-semibold rounded-xl transition-all active:scale-95 cursor-pointer shadow-lg shadow-green-500/20"
+                whileHover={{ scale: 1.04, y: -1 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center gap-2.5 px-6 py-3 bg-green-500 hover:bg-green-400 text-zinc-950 font-semibold rounded-xl cursor-pointer shadow-lg shadow-green-500/20"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 </svg>
                 Pilih Folder Musik
-            </button>
+            </motion.button>
         </div>
     );
 }

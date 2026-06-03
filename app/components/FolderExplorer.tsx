@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export interface FileEntry {
     name: string;
@@ -101,55 +102,87 @@ export default function FolderExplorer({
             className="relative flex shrink-0 flex-col border-r border-zinc-800/50 bg-black/30"
         >
             <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-800/30">
-                <button
+                <motion.button
                     onClick={goUp}
                     title="Ke folder induk"
-                    aria-hidden={displayPath === musicFolder}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.92 }}
+                    transition={{ duration: 0.12 }}
                     className={`flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 
-        text-zinc-400 hover:text-zinc-100 transition-all active:scale-95 shrink-0 ${displayPath === musicFolder ? 'invisible pointer-events-none' : 'cursor-pointer'}`}
+        text-zinc-400 hover:text-zinc-100 shrink-0 ${displayPath === musicFolder ? 'invisible pointer-events-none' : 'cursor-pointer'}`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="m15 18-6-6 6-6" />
                     </svg>
-                </button>
+                </motion.button>
                 <span className="text-xs text-zinc-500 truncate flex-1" title={displayPath}>{displayPath}</span>
-                <button
+                <motion.button
                     onClick={onChangeFolder}
                     title={`Ganti folder (${musicFolder})`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.92 }}
+                    transition={{ duration: 0.12 }}
                     className="flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 
-        text-zinc-400 hover:text-zinc-100 transition-all active:scale-95 cursor-pointer shrink-0"
+        text-zinc-400 hover:text-zinc-100 cursor-pointer shrink-0"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                         <path d="M9 12h6M12 9l3 3-3 3" />
                     </svg>
-                </button>
+                </motion.button>
             </div>
             <div className="flex-1 overflow-y-auto">
                 {files.length === 0 ? (
                     <div className="p-4 text-zinc-600 text-center">Tidak ada file</div>
                 ) : (
-                    files.map((file) => (
-                        <button
-                            key={file.path}
-                            onClick={() => file.is_dir ? setCurrentPath(file.path) : playSong(file)}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors cursor-pointer ${selectedSong?.path === file.path
-                                ? 'bg-green-500/10 text-green-400 border-l-2 border-green-500'
-                                : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent'
-                                }`}
+                    <motion.div
+                        initial="hidden"
+                        animate="show"
+                        variants={{
+                            hidden: {},
+                            show: { transition: { staggerChildren: 0.025 } },
+                        }}
+                    >
+                        {files.map((file) => {
+                            const isSelected = selectedSong?.path === file.path;
+                            return (
+                                <motion.button
+                                    key={file.path}
+                                    variants={{
+                                        hidden: { opacity: 0, x: -8 },
+                                        show: { opacity: 1, x: 0 },
+                                    }}
+                                    transition={{ duration: 0.2 }}
+                                    onClick={() => file.is_dir ? setCurrentPath(file.path) : playSong(file)}
+                                    whileHover={{ x: 2 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer ${isSelected
+                                        ? 'bg-green-500/10 text-green-400 border-l-2 border-green-500'
+                                        : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent'
+                                        }`}
+                                >
+                                    <span className="shrink-0 text-[10px]">
+                                        {file.is_dir ? '📁' : isSelected ? '▶' : '🎵'}
+                                    </span>
+                                    <span className="truncate">{file.name}</span>
+                                </motion.button>
+                            );
+                        })}
+                    </motion.div>
+                )}
+                <AnimatePresence>
+                    {debugError && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="p-2 text-[10px] text-red-400/70 border-t border-zinc-800/30 truncate overflow-hidden"
                         >
-                            <span className="shrink-0 text-[10px]">
-                                {file.is_dir ? '📁' : selectedSong?.path === file.path ? '▶' : '🎵'}
-                            </span>
-                            <span className="truncate">{file.name}</span>
-                        </button>
-                    ))
-                )}
-                {debugError && (
-                    <div className="p-2 text-[10px] text-red-400/70 border-t border-zinc-800/30 truncate">
-                        {debugError}
-                    </div>
-                )}
+                            {debugError}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
             <div
                 onMouseDown={onMouseDown}
