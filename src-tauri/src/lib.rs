@@ -93,11 +93,11 @@ fn list_files(
     folder_sort: String,
     file_sort: String,
     sort_dir: String,
+    formats: Vec<String>,
 ) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| format!("Gagal membaca folder: {}", e))?;
 
     let mut files: Vec<FileEntry> = Vec::new();
-    let audio_exts = ["mp3", "flac", "ogg", "wav", "m4a", "wma"];
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Gagal membaca entry: {}", e))?;
@@ -118,7 +118,7 @@ fn list_files(
             .to_lowercase()
             .to_string();
 
-        if is_dir || audio_exts.contains(&ext.as_str()) {
+        if is_dir || formats.contains(&ext) {
             let mtime = metadata
                 .modified()
                 .unwrap_or(SystemTime::UNIX_EPOCH)

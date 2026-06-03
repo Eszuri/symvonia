@@ -22,6 +22,15 @@ const THEME_KEY = 'music-app-theme';
 const ACCENT_KEY = 'music-app-accent';
 const CUSTOM_ACCENT_KEY = 'music-app-custom-accent';
 const WALLPAPER_KEY = 'music-app-wallpaper';
+const FORMATS_KEY = 'music-app-formats';
+const DEFAULT_FORMATS = ['mp3', 'flac', 'ogg', 'wav', 'm4a', 'wma'];
+
+interface LogEntry {
+    id: number;
+    time: string;
+    level: string;
+    message: string;
+}
 
 interface TauriCore {
     invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -54,11 +63,37 @@ export default function Home() {
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
     const [debugError, setDebugError] = useState('');
+    const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [toastMsg, setToastMsg] = useState('');
+    const [toastVisible, setToastVisible] = useState(false);
+    const logIdRef = useRef(0);
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const addLog = useCallback((level: string, message: string) => {
+        const id = ++logIdRef.current;
+        const now = new Date();
+        const time = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const entry: LogEntry = { id, time, level, message };
+        setLogs(prev => [...prev.slice(-499), entry]);
+        if (level === 'error' || level === 'warn') {
+            console[level]?.(message) ?? console.log(`[${level}] ${message}`);
+        }
+    }, []);
+
+    const showError = useCallback((msg: string) => {
+        setDebugError(msg);
+        addLog('error', msg);
+        setToastMsg(msg);
+        setToastVisible(true);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToastVisible(false), 4000);
+    }, [addLog]);
     const [autoWallpaper, setAutoWallpaperState] = useState(true);
     const [resetOnClose, setResetOnCloseState] = useState(true);
     const [folderSort, setFolderSortState] = useState('mtime');
     const [fileSort, setFileSortState] = useState('mtime');
     const [sortDir, setSortDirState] = useState('asc');
+    const [formats, setFormatsState] = useState<string[]>(DEFAULT_FORMATS);
     const [theme, setThemeState] = useState('dark');
     const [accentColor, setAccentColorState] = useState('green');
     const [customAccentHex, setCustomAccentHexState] = useState('#22c55e');
@@ -74,11 +109,13 @@ export default function Home() {
     const folderSortRef = useRef<string>('mtime');
     const fileSortRef = useRef<string>('mtime');
     const sortDirRef = useRef<string>('asc');
+    const formatsRef = useRef<string[]>(DEFAULT_FORMATS);
 
     filesRef.current = files;
     selectedSongRef.current = selectedSong;
     volumeRef.current = volume;
     autoWallpaperRef.current = autoWallpaper;
+    formatsRef.current = formats;
 
     const setMusicFolder = useCallback((folder: string | null) => {
         setMusicFolderState(folder);
@@ -118,6 +155,10 @@ export default function Home() {
         if (fls) setFileSortState(fls);
         const sd = window.localStorage.getItem(SORT_DIR_KEY);
         if (sd) setSortDirState(sd);
+        const fm = window.localStorage.getItem(FORMATS_KEY);
+        if (fm) {
+            try { setFormatsState(JSON.parse(fm)); } catch { /* ignore */ }
+        }
         const th = window.localStorage.getItem(THEME_KEY);
         if (th) setThemeState(th);
         const ac = window.localStorage.getItem(ACCENT_KEY);
@@ -161,6 +202,13 @@ export default function Home() {
         sortDirRef.current = sortDir;
         if (currentPath) loadFiles(currentPath);
     }, [sortDir, currentPath]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(FORMATS_KEY, JSON.stringify(formats));
+        formatsRef.current = formats;
+        if (currentPath) loadFiles(currentPath);
+    }, [formats, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -262,13 +310,13 @@ export default function Home() {
                 folderSort: folderSortRef.current,
                 fileSort: fileSortRef.current,
                 sortDir: sortDirRef.current,
+                formats: formatsRef.current,
             });
             setFiles(result);
             setDebugError('');
         } catch (e) {
             const msg = String(e);
-            setDebugError(msg);
-            console.error('list_files error:', e);
+            showError(msg);
             setFiles([]);
         }
     }, []);
@@ -286,8 +334,7 @@ export default function Home() {
                         coverB64: result.cover_b64,
                     }).catch((e: unknown) => {
                         const msg = String(e);
-                        console.error('Gagal set wallpaper:', msg);
-                        setDebugError(`Wallpaper error: ${msg}`);
+                        showError(`Wallpaper error: ${msg}`);
                     });
                 } else {
                     mod.invoke('clear_wallpaper').catch(() => {});
@@ -362,12 +409,13 @@ export default function Home() {
 
             setSelectedSong(file);
             loadMetadata(file.path);
+            addLog('info', `Memutar: ${file.name}`);
         } catch (e) {
             if (e instanceof DOMException && e.name === 'AbortError') return;
             console.error('Gagal play:', e);
         }
-    }, [loadMetadata]);
-
+    }, [loadMetadata, addLog]);
+ 
     const togglePlayPause = useCallback(() => {
         const audio = audioRef.current;
         if (!audio || !audio.src) return;
@@ -479,12 +527,14 @@ export default function Home() {
             const msg = String(e);
             console.error('pick_folder error:', e);
             setDebugError(`Folder picker error: ${msg}`);
+            showError(`Folder picker error: ${msg}`);
         }
     }, [setMusicFolder]);
 
     const handlePickFolder = useCallback(async () => {
         if (!isBrowserTauri) {
             setDebugError('Folder picker hanya tersedia di aplikasi desktop');
+            showError('Folder picker hanya tersedia di aplikasi desktop');
             return;
         }
         if (isPlaying) {
@@ -497,6 +547,7 @@ export default function Home() {
     const handlePickWallpaper = useCallback(async () => {
         if (!isBrowserTauri) {
             setDebugError('Gambar picker hanya tersedia di aplikasi desktop');
+            showError('Gambar picker hanya tersedia di aplikasi desktop');
             return;
         }
         try {
@@ -509,6 +560,7 @@ export default function Home() {
             const msg = String(e);
             console.error('pick_wallpaper error:', e);
             setDebugError(`Wallpaper picker error: ${msg}`);
+            showError(`Wallpaper picker error: ${msg}`);
         }
     }, [setDefaultWallpaper]);
 
@@ -676,6 +728,8 @@ export default function Home() {
                 setFileSort={setFileSortState}
                 sortDir={sortDir}
                 setSortDir={setSortDirState}
+                formats={formats}
+                setFormats={setFormatsState}
                 theme={theme}
                 setTheme={setThemeState}
                 accentColor={accentColor}
@@ -683,7 +737,35 @@ export default function Home() {
                 customAccentHex={customAccentHex}
                 setCustomAccentHex={setCustomAccentHexState}
                 onResetSidebarWidth={() => setResetSidebarToken((t) => t + 1)}
+                logs={logs}
             />
+
+            <AnimatePresence>
+                {toastVisible && (
+                    <motion.div
+                        key="toast"
+                        initial={{ opacity: 0, y: -12, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -12, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed top-4 right-4 z-[70] flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-900/80 border border-red-700/50 text-sm text-red-200 shadow-2xl shadow-black/40 backdrop-blur-sm"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M12 8v4M12 16h.01" />
+                        </svg>
+                        <span>Terjadi error. Cek <strong>Debug</strong> log untuk detail.</span>
+                        <button
+                            onClick={() => setToastVisible(false)}
+                            className="ml-2 w-5 h-5 rounded flex items-center justify-center text-red-300 hover:text-red-100 hover:bg-red-800/60 cursor-pointer"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

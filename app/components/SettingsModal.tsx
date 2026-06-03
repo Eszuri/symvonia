@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccent } from '../lib/colors';
 
-type SectionId = 'general' | 'sort' | 'style' | 'about';
+export interface LogEntry {
+    id: number;
+    time: string;
+    level: string;
+    message: string;
+}
+
+type SectionId = 'general' | 'sort' | 'style' | 'about' | 'debug';
 
 interface SectionDef {
     id: SectionId;
@@ -46,6 +53,16 @@ const SECTIONS: SectionDef[] = [
         ),
     },
     {
+        id: 'debug',
+        label: 'Debug',
+        icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+        ),
+    },
+    {
         id: 'about',
         label: 'About',
         icon: (
@@ -75,6 +92,8 @@ interface SettingsModalProps {
     setFileSort: (v: string) => void;
     sortDir: string;
     setSortDir: (v: string) => void;
+    formats: string[];
+    setFormats: (v: string[]) => void;
     theme: string;
     setTheme: (v: string) => void;
     accentColor: string;
@@ -82,6 +101,7 @@ interface SettingsModalProps {
     customAccentHex: string;
     setCustomAccentHex: (v: string) => void;
     onResetSidebarWidth: () => void;
+    logs: LogEntry[];
 }
 
 export default function SettingsModal({
@@ -102,6 +122,8 @@ export default function SettingsModal({
     setFileSort,
     sortDir,
     setSortDir,
+    formats,
+    setFormats,
     theme,
     setTheme,
     accentColor,
@@ -109,6 +131,7 @@ export default function SettingsModal({
     customAccentHex,
     setCustomAccentHex,
     onResetSidebarWidth,
+    logs,
 }: SettingsModalProps) {
     const [activeSection, setActiveSection] = useState<SectionId>('general');
 
@@ -209,6 +232,8 @@ export default function SettingsModal({
                                 setFileSort={setFileSort}
                                 sortDir={sortDir}
                                 setSortDir={setSortDir}
+                                formats={formats}
+                                setFormats={setFormats}
                             />
                         )}
                         {activeSection === 'style' && (
@@ -223,6 +248,7 @@ export default function SettingsModal({
                             />
                         )}
                         {activeSection === 'about' && <AboutSection />}
+                        {activeSection === 'debug' && <DebugSection logs={logs} />}
                     </div>
                 </div>
                 </motion.div>
@@ -333,6 +359,8 @@ function SortSection({
     setFileSort,
     sortDir,
     setSortDir,
+    formats,
+    setFormats,
 }: {
     folderSort: string;
     setFolderSort: (v: string) => void;
@@ -340,7 +368,28 @@ function SortSection({
     setFileSort: (v: string) => void;
     sortDir: string;
     setSortDir: (v: string) => void;
+    formats: string[];
+    setFormats: (v: string[]) => void;
 }) {
+    const allFormats = ['mp3', 'flac', 'ogg', 'wav', 'm4a', 'wma'];
+    const [customInput, setCustomInput] = useState('');
+    const toggleFormat = (fmt: string) => {
+        if (formats.includes(fmt)) {
+            if (formats.length > 1) setFormats(formats.filter(f => f !== fmt));
+        } else {
+            setFormats([...formats, fmt]);
+        }
+    };
+    const addCustomFormat = () => {
+        let ext = customInput.trim().toLowerCase().replace(/^\./, '');
+        if (!ext || !/^[a-z0-9]+$/.test(ext)) return;
+        if (!formats.includes(ext)) {
+            setFormats([...formats, ext]);
+        }
+        setCustomInput('');
+    };
+    // Collect all unique formats for display (predefined first, then custom)
+    const displayedFormats = [...new Set([...allFormats, ...formats])];
     return (
         <div className="space-y-6">
             <SettingRow
@@ -372,6 +421,47 @@ function SortSection({
                     value={sortDir}
                     onChange={setSortDir}
                 />
+            </SettingRow>
+            <SettingRow
+                title="Format File"
+                description="Format file audio yang ditampilkan di explorer"
+            >
+                <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5 max-w-[260px]">
+                        {displayedFormats.map((fmt) => {
+                            const active = formats.includes(fmt);
+                            const isCustom = !allFormats.includes(fmt);
+                            return (
+                                <button
+                                    key={fmt}
+                                    onClick={() => toggleFormat(fmt)}
+                                    className={`px-2 py-1 rounded-md text-[11px] font-medium border cursor-pointer transition-all ${active
+                                        ? 'bg-zinc-700/80 text-zinc-200 border-zinc-600'
+                                        : 'bg-zinc-800/40 text-zinc-500 border-zinc-700/50 hover:bg-zinc-800/70 hover:text-zinc-400'
+                                        } ${isCustom ? 'italic' : ''}`}
+                                >
+                                    .{fmt}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <input
+                            type="text"
+                            value={customInput}
+                            onChange={(e) => setCustomInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && addCustomFormat()}
+                            placeholder=".aac"
+                            className="w-20 px-2 py-1 rounded-md text-[11px] bg-zinc-800/60 border border-zinc-700/50 text-zinc-300 outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+                        />
+                        <button
+                            onClick={addCustomFormat}
+                            className="px-2 py-1 rounded-md text-[11px] font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 transition-colors cursor-pointer"
+                        >
+                            Tambah
+                        </button>
+                    </div>
+                </div>
             </SettingRow>
         </div>
     );
@@ -500,6 +590,34 @@ function AboutSection() {
                 <p className="text-xs text-zinc-500">
                     Audio metadata: Lofty · Image: image · File dialog: rfd
                 </p>
+            </div>
+        </div>
+    );
+}
+
+function DebugSection({ logs }: { logs: LogEntry[] }) {
+    const bottomRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [logs.length]);
+    return (
+        <div className="h-full flex flex-col">
+            <div className="text-xs text-zinc-500 mb-2">
+                Total log: {logs.length}
+            </div>
+            <div className="flex-1 overflow-y-auto bg-black/40 rounded-xl border border-zinc-800 p-3 font-mono text-[11px] leading-relaxed space-y-1">
+                {logs.length === 0 ? (
+                    <div className="text-zinc-600 italic">Belum ada log</div>
+                ) : (
+                    logs.map((log) => (
+                        <div key={log.id} className={`${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-zinc-400'}`}>
+                            <span className="text-zinc-600">[{log.time}]</span>
+                            <span className="uppercase mx-1 text-[10px] opacity-70">[{log.level}]</span>
+                            <span>{log.message}</span>
+                        </div>
+                    ))
+                )}
+                <div ref={bottomRef} />
             </div>
         </div>
     );
