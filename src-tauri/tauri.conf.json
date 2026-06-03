@@ -2,7 +2,7 @@
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
     "productName": "Symvonia",
     "version": "0.3.0",
-    "identifier": "com.symvonia.app",
+    "identifier": "com.symvonia.player",
     "build": {
         "frontendDist": "../out",
         "devUrl": "http://localhost:3000",
@@ -47,11 +47,11 @@
         "android": {
             "debugApplicationIdSuffix": ".debug"
         },
-        "createUpdaterArtifacts": true
+        "createUpdaterArtifacts": "v1Compatible"
     },
     "plugins": {
         "updater": {
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVFMkNGNzQzQ0QzNzE1OEMKUldTTUZUZk5RL2NzN2pDeHVQZ3p5OE5hemN0Y1MxV0VjbTAvVmFWeXZvWkxWQlVGVE1CTWprZ2QK",
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcyNEUxNzRCMTRFQ0E0QjEKUldTeHBPd1VTeGRPY3JaQVUwR3M2S0NxeUdnbkZuS3dtWStZSWhhWmZlVVRqdnJvVlRhUDZ5QmEK",
             "endpoints": [
                 "https://github.com/Eszuri/symvonia/releases/latest/download/latest.json"
             ]
