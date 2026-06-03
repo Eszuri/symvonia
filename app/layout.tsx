@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "My Music",
+  title: "Symvonia",
   description: "Music player desktop app built with Next.js + Tauri",
 };
 

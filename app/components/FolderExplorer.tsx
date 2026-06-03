@@ -10,6 +10,8 @@ export interface FileEntry {
     is_dir: boolean;
     ext: string;
     mtime: number;
+    size: number;
+    ctime: number;
 }
 
 interface FolderExplorerProps {

@@ -1,49 +1,60 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "My Music",
-  "version": "0.1.0",
-  "identifier": "com.my-music.player",
-  "build": {
-    "frontendDist": "../out",
-    "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "My Music",
-        "width": 1000,
-        "height": 700,
-        "minWidth": 800,
-        "minHeight": 500,
-        "resizable": true,
-        "fullscreen": false,
-        "maximized": true
-      }
-    ],
-    "security": {
-      "csp": null,
-      "assetProtocol": {
-        "enable": true,
-        "scope": {
-          "allow": ["**"]
+    "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+    "productName": "Symvonia",
+    "version": "0.3.0",
+    "identifier": "com.symvonia.app",
+    "build": {
+        "frontendDist": "../out",
+        "devUrl": "http://localhost:3000",
+        "beforeDevCommand": "npm run dev",
+        "beforeBuildCommand": "npm run build"
+    },
+    "app": {
+        "windows": [
+            {
+                "title": "Symvonia",
+                "width": 1000,
+                "height": 700,
+                "minWidth": 800,
+                "minHeight": 700,
+                "resizable": true,
+                "fullscreen": false,
+                "maximized": true
+            }
+        ],
+        "security": {
+            "csp": null,
+            "assetProtocol": {
+                "enable": true,
+                "scope": {
+                    "allow": [
+                        "**"
+                    ]
+                }
+            }
         }
-      }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "android": {
+            "debugApplicationIdSuffix": ".debug"
+        },
+        "createUpdaterArtifacts": true
+    },
+    "plugins": {
+        "updater": {
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVFMkNGNzQzQ0QzNzE1OEMKUldTTUZUZk5RL2NzN2pDeHVQZ3p5OE5hemN0Y1MxV0VjbTAvVmFWeXZvWkxWQlVGVE1CTWprZ2QK",
+            "endpoints": [
+                "https://github.com/Eszuri/symvonia/releases/latest/download/latest.json"
+            ]
+        }
     }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "android": {
-      "debugApplicationIdSuffix": ".debug"
-    }
-  }
 }

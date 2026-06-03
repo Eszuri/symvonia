@@ -9,6 +9,7 @@ import PlaybackControls from './components/PlaybackControls';
 import VolumeControl from './components/VolumeControl';
 import ConfirmDialog from './components/ConfirmDialog';
 import SettingsModal from './components/SettingsModal';
+import MetadataPanel from './components/MetadataPanel';
 import { getAccent, setCustomAccentVars, removeCustomAccentVars } from './lib/colors';
 
 const isBrowserTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -132,10 +133,18 @@ export default function Home() {
     const [sortDir, setSortDirState] = useState('asc');
     const [formats, setFormatsState] = useState<string[]>(DEFAULT_FORMATS);
     const [theme, setThemeState] = useState('dark');
+    const [shuffle, setShuffleState] = useState(false);
+    const [repeat, setRepeatState] = useState<'off' | 'all' | 'one'>('off');
     const [accentColor, setAccentColorState] = useState('green');
     const [customAccentHex, setCustomAccentHexState] = useState('#22c55e');
     const [defaultWallpaper, setDefaultWallpaperState] = useState<string | null>(null);
     const [resetSidebarToken, setResetSidebarToken] = useState(0);
+    const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
+    const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+    const [showRightSidebar, setShowRightSidebar] = useState(true);
+
+    const SIDEBAR_BREAKPOINT = 900;
+    const isCompact = windowWidth < SIDEBAR_BREAKPOINT;
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const filesRef = useRef<FileEntry[]>([]);
@@ -147,6 +156,8 @@ export default function Home() {
     const fileSortRef = useRef<string>('name');
     const sortDirRef = useRef<string>('asc');
     const formatsRef = useRef<string[]>(DEFAULT_FORMATS);
+    const shuffleRef = useRef(false);
+    const repeatRef = useRef<'off' | 'all' | 'one'>('off');
 
     filesRef.current = files;
     selectedSongRef.current = selectedSong;
@@ -161,6 +172,26 @@ export default function Home() {
         } else {
             window.localStorage.removeItem(FOLDER_STORAGE_KEY);
         }
+    }, []);
+
+    useEffect(() => {
+        if (!isCompact) {
+            setShowLeftSidebar(true);
+            setShowRightSidebar(true);
+        } else {
+            setShowLeftSidebar(false);
+            setShowRightSidebar(false);
+        }
+    }, [isCompact]);
+
+    useEffect(() => {
+        let raf = 0;
+        const handleResize = () => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => setWindowWidth(window.innerWidth));
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     const setDefaultWallpaper = useCallback((path: string | null) => {
@@ -204,6 +235,10 @@ export default function Home() {
         if (ca) setCustomAccentHexState(ca);
         const wp = window.localStorage.getItem(WALLPAPER_KEY);
         if (wp) setDefaultWallpaperState(wp);
+        const sh = window.localStorage.getItem('music-app-shuffle');
+        if (sh !== null) setShuffleState(sh === 'true');
+        const rp = window.localStorage.getItem('music-app-repeat');
+        if (rp === 'all' || rp === 'one') setRepeatState(rp);
     }, []);
 
     useEffect(() => {
@@ -246,6 +281,19 @@ export default function Home() {
         formatsRef.current = formats;
         if (currentPath) loadFiles(currentPath);
     }, [formats, currentPath]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('music-app-shuffle', String(shuffle));
+        shuffleRef.current = shuffle;
+    }, [shuffle]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('music-app-repeat', repeat);
+        repeatRef.current = repeat;
+        if (audioRef.current) audioRef.current.loop = repeat === 'one';
+    }, [repeat]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -442,6 +490,7 @@ export default function Home() {
             }
             audio.src = src;
             audio.volume = volumeRef.current;
+            audio.loop = repeatRef.current === 'one';
             await audio.play();
 
             setSelectedSong(file);
@@ -488,12 +537,26 @@ export default function Home() {
     }, []);
 
     const playNext = useCallback(() => {
-        const current = selectedSongRef.current;
         const list = playlistRef.current;
-        if (!current || list.length === 0) return;
+        if (list.length === 0) return;
 
-        const idx = list.findIndex(f => f.path === current.path);
-        const nextFile = idx >= 0 ? list[idx + 1] : list[0];
+        let nextFile: FileEntry | undefined;
+        if (shuffleRef.current) {
+            const currentPath = selectedSongRef.current?.path;
+            const candidates = list.filter(f => f.path !== currentPath);
+            if (candidates.length > 0) {
+                nextFile = candidates[Math.floor(Math.random() * candidates.length)];
+            } else {
+                nextFile = list[0];
+            }
+        } else {
+            const current = selectedSongRef.current;
+            const idx = current ? list.findIndex(f => f.path === current.path) : -1;
+            nextFile = idx >= 0 ? list[idx + 1] : list[0];
+            if (!nextFile && repeatRef.current === 'all') {
+                nextFile = list[0];
+            }
+        }
         if (nextFile) {
             playSong(nextFile);
         } else {
@@ -502,12 +565,23 @@ export default function Home() {
     }, [playSong, resetPlayer]);
 
     const playPrev = useCallback(() => {
-        const current = selectedSongRef.current;
         const list = playlistRef.current;
-        if (!current || list.length === 0) return;
+        if (list.length === 0) return;
 
-        const idx = list.findIndex(f => f.path === current.path);
-        const prevFile = idx >= 0 ? list[idx - 1] : list[list.length - 1];
+        let prevFile: FileEntry | undefined;
+        if (shuffleRef.current) {
+            const currentPath = selectedSongRef.current?.path;
+            const candidates = list.filter(f => f.path !== currentPath);
+            if (candidates.length > 0) {
+                prevFile = candidates[Math.floor(Math.random() * candidates.length)];
+            } else {
+                prevFile = list[0];
+            }
+        } else {
+            const current = selectedSongRef.current;
+            const idx = current ? list.findIndex(f => f.path === current.path) : -1;
+            prevFile = idx > 0 ? list[idx - 1] : (repeatRef.current === 'all' ? list[list.length - 1] : undefined);
+        }
         if (prevFile) {
             playSong(prevFile);
         }
@@ -549,6 +623,8 @@ export default function Home() {
 
     const [pendingFolderChange, setPendingFolderChange] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [updateChecking, setUpdateChecking] = useState(false);
+    const [updateStatus, setUpdateStatus] = useState('');
 
     const doPickFolder = useCallback(async () => {
         try {
@@ -601,6 +677,41 @@ export default function Home() {
         }
     }, [setDefaultWallpaper]);
 
+    const handleCheckUpdate = useCallback(async () => {
+        if (!isBrowserTauri) {
+            setUpdateStatus('Hanya tersedia di aplikasi desktop');
+            return;
+        }
+        setUpdateChecking(true);
+        setUpdateStatus('');
+        try {
+            const { check } = await import('@tauri-apps/plugin-updater');
+            const update = await check();
+            if (update) {
+                setUpdateStatus(`v${update.version} tersedia. Mendownload...`);
+                let downloaded = 0;
+                let total = 0;
+                await update.download((ev) => {
+                    if (ev.event === 'Started') {
+                        total = ev.data.contentLength ?? 0;
+                    } else if (ev.event === 'Progress') {
+                        downloaded += ev.data.chunkLength;
+                    }
+                });
+                setUpdateStatus(`v${update.version} siap. Menginstall...`);
+                await update.install();
+            } else {
+                setUpdateStatus('Sudah versi terbaru');
+            }
+        } catch (e) {
+            const msg = String(e);
+            setUpdateStatus(`Error: ${msg.slice(0, 80)}`);
+            addLog('error', `Update check failed: ${msg}`);
+        } finally {
+            setUpdateChecking(false);
+        }
+    }, [addLog]);
+
     const confirmFolderChange = useCallback(() => {
         setPendingFolderChange(false);
         if (audioRef.current) {
@@ -630,10 +741,40 @@ export default function Home() {
                     </svg>
                     Setting
                 </motion.button>
+                {isCompact && musicFolder && (
+                    <div className="absolute left-[108px] flex items-center gap-1.5">
+                        <motion.button
+                            onClick={() => setShowLeftSidebar(v => !v)}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.92 }}
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer ${showLeftSidebar ? 'bg-zinc-700/70 text-zinc-200' : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'}`}
+                            title="Toggle sidebar daftar lagu"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 3h18v18H3z" />
+                                <path d="M8 3v18" />
+                            </svg>
+                            List
+                        </motion.button>
+                        <motion.button
+                            onClick={() => setShowRightSidebar(v => !v)}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.92 }}
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer ${showRightSidebar ? 'bg-zinc-700/70 text-zinc-200' : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'}`}
+                            title="Toggle panel detail"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 16v-4M12 8h.01" />
+                            </svg>
+                            Info
+                        </motion.button>
+                    </div>
+                )}
                 <h1 className="text-lg font-bold tracking-tight text-zinc-100 truncate max-w-[40%]">
                     {selectedSong
                         ? (metadata?.title || selectedSong.name.replace(/\.[^.]+$/, ''))
-                        : 'My Music'}
+                         : 'Symvonia'}
                 </h1>
                 {(() => {
                     const accent = getAccent(accentColor);
@@ -688,28 +829,41 @@ export default function Home() {
                         transition={{ duration: 0.25 }}
                         className="flex flex-1 overflow-hidden"
                     >
-                        <FolderExplorer
-                            files={files}
-                            selectedSong={selectedSong}
-                            displayPath={displayPath}
-                            debugError={debugError}
-                            goUp={goUp}
-                            setCurrentPath={setCurrentPath}
-                            playSong={playSong}
-                            onChangeFolder={handlePickFolder}
-                            musicFolder={musicFolder}
-                            resetSidebarToken={resetSidebarToken}
-                            accentColor={accentColor}
-                        />
+                        <AnimatePresence>
+                            {(showLeftSidebar || !isCompact) && (
+                                <motion.aside
+                                    initial={isCompact ? { width: 0, opacity: 0 } : false}
+                                    animate={{ width: 'auto', opacity: 1 }}
+                                    exit={{ width: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex shrink-0 overflow-hidden"
+                                >
+                                    <FolderExplorer
+                                        files={files}
+                                        selectedSong={selectedSong}
+                                        displayPath={displayPath}
+                                        debugError={debugError}
+                                        goUp={goUp}
+                                        setCurrentPath={setCurrentPath}
+                                        playSong={playSong}
+                                        onChangeFolder={handlePickFolder}
+                                        musicFolder={musicFolder}
+                                        resetSidebarToken={resetSidebarToken}
+                                        accentColor={accentColor}
+                                    />
+                                </motion.aside>
+                            )}
+                        </AnimatePresence>
 
                         <main className="flex-1 flex items-center justify-center p-6 overflow-hidden">
                             {files.length === 0 ? (
                                 <EmptyFolderState folder={displayPath} />
                             ) : (
-                                <div className="flex flex-col items-center gap-5 w-full max-w-2xl">
+                                <div className="flex flex-col items-center gap-4 w-full max-w-2xl">
                                     <PlayerPanel
                                         metadata={metadata}
                                         selectedSong={selectedSong}
+                                        accentColor={accentColor}
                                     />
                                     <SeekBar
                                         currentTime={currentTime}
@@ -720,9 +874,13 @@ export default function Home() {
                                     <PlaybackControls
                                         selectedSong={selectedSong}
                                         isPlaying={isPlaying}
+                                        shuffle={shuffle}
+                                        repeat={repeat}
                                         playPrev={playPrev}
                                         togglePlayPause={togglePlayPause}
                                         playNext={playNext}
+                                        setShuffle={setShuffleState}
+                                        setRepeat={setRepeatState}
                                         accentColor={accentColor}
                                     />
                                     <VolumeControl
@@ -733,6 +891,25 @@ export default function Home() {
                                 </div>
                             )}
                         </main>
+
+                        <AnimatePresence>
+                            {(showRightSidebar || !isCompact) && (
+                                <motion.aside
+                                    initial={isCompact ? { width: 0, opacity: 0 } : false}
+                                    animate={{ width: 'auto', opacity: 1 }}
+                                    exit={{ width: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex shrink-0 overflow-hidden"
+                                >
+                                    <MetadataPanel
+                                        selectedSong={selectedSong}
+                                        metadata={metadata}
+                                        accentColor={accentColor}
+                                        resetSidebarToken={resetSidebarToken}
+                                    />
+                                </motion.aside>
+                            )}
+                        </AnimatePresence>
                     </motion.div>
                 )}
                 </AnimatePresence>
@@ -775,6 +952,9 @@ export default function Home() {
                 setCustomAccentHex={setCustomAccentHexState}
                 onResetSidebarWidth={() => setResetSidebarToken((t) => t + 1)}
                 logs={logs}
+                onCheckUpdate={handleCheckUpdate}
+                updateStatus={updateStatus}
+                updateChecking={updateChecking}
             />
 
             <AnimatePresence>
@@ -814,7 +994,7 @@ function NoFolderEmptyState({ onPickFolder, accentColor }: { onPickFolder: () =>
             <div className="w-24 h-24 rounded-3xl bg-zinc-900/80 border border-zinc-800/50 flex items-center justify-center mb-6 shadow-2xl shadow-black/50">
                 <span className="text-5xl opacity-30">📁</span>
             </div>
-            <h2 className="text-2xl font-semibold text-zinc-200 mb-2">Selamat Datang di My Music</h2>
+            <h2 className="text-2xl font-semibold text-zinc-200 mb-2">Selamat Datang di Symvonia</h2>
             <p className="text-sm text-zinc-500 max-w-md mb-8 leading-relaxed">
                 Pilih folder tempat kamu menyimpan koleksi musik untuk mulai memutar. Aplikasi akan membaca metadata
                 dan cover art dari file audio secara otomatis.

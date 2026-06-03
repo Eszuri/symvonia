@@ -54,6 +54,16 @@ struct SongMetadata {
     duration: Option<f64>,
     cover_b64: Option<String>,
     cover_mime: Option<String>,
+    genre: Option<String>,
+    year: Option<u32>,
+    track_number: Option<u32>,
+    total_tracks: Option<u32>,
+    disc_number: Option<u32>,
+    total_discs: Option<u32>,
+    comment: Option<String>,
+    bitrate: Option<u32>,
+    sample_rate: Option<u32>,
+    channels: Option<u8>,
 }
 
 #[tauri::command]
@@ -175,18 +185,30 @@ fn get_metadata(file_path: String) -> Result<SongMetadata, String> {
 
     let tagged_file = read_from_path(path).map_err(|e| format!("Gagal baca metadata: {}", e))?;
 
-    let duration = tagged_file.properties().duration().as_secs_f64();
+    let props = tagged_file.properties();
+    let duration = props.duration().as_secs_f64();
+    let bitrate = props.audio_bitrate();
+    let sample_rate = props.sample_rate();
+    let channels = props.channels();
+
     let tag = tagged_file.primary_tag();
 
-    let (title, artist, album) = tag
+    let (title, artist, album, genre, year, track_number, total_tracks, disc_number, total_discs, comment) = tag
         .map(|t| {
             (
                 t.title().map(|s| s.to_string()),
                 t.artist().map(|s| s.to_string()),
                 t.album().map(|s| s.to_string()),
+                t.genre().map(|s| s.to_string()),
+                t.year(),
+                t.track(),
+                t.track_total(),
+                t.disk(),
+                t.disk_total(),
+                t.comment().map(|s| s.to_string()),
             )
         })
-        .unwrap_or((None, None, None));
+        .unwrap_or((None, None, None, None, None, None, None, None, None, None));
 
     let (cover_b64, cover_mime) = if let Some(t) = tag {
         if let Some(pic) = t.pictures().first() {
@@ -208,6 +230,16 @@ fn get_metadata(file_path: String) -> Result<SongMetadata, String> {
         duration: Some(duration),
         cover_b64,
         cover_mime,
+        genre,
+        year,
+        track_number,
+        total_tracks,
+        disc_number,
+        total_discs,
+        comment,
+        bitrate,
+        sample_rate,
+        channels,
     })
 }
 
@@ -289,6 +321,7 @@ pub fn run() {
             get_default_wallpaper_path,
             set_reset_on_close
         ])
+        .plugin(tauri_plugin_updater::Builder::default().build())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

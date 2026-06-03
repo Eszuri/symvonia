@@ -1,7 +1,7 @@
 [package]
-name = "my-music"
-version = "0.1.0"
-description = "My Music - Desktop Music Player"
+name = "symvonia"
+version = "0.3.0"
+description = "Symvonia - Desktop Music Player"
 authors = ["Eszuri"]
 license = ""
 repository = ""
@@ -11,7 +11,7 @@ rust-version = "1.77.2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "my_music_lib"
+name = "symvonia_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -27,3 +27,4 @@ lofty = "0.22"
 base64 = "0.22"
 image = "0.25"
 rfd = "0.15"
+tauri-plugin-updater = "2"
