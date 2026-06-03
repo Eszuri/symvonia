@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { getAccent } from '../lib/colors';
 
 interface ConfirmDialogProps {
     open: boolean;
@@ -11,6 +12,7 @@ interface ConfirmDialogProps {
     cancelLabel?: string;
     onConfirm: () => void;
     onCancel: () => void;
+    accentColor: string;
 }
 
 export default function ConfirmDialog({
@@ -21,7 +23,9 @@ export default function ConfirmDialog({
     cancelLabel = 'Batal',
     onConfirm,
     onCancel,
+    accentColor,
 }: ConfirmDialogProps) {
+    const accent = getAccent(accentColor);
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
@@ -40,7 +44,7 @@ export default function ConfirmDialog({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
                     onClick={onCancel}
                 >
                     <motion.div
@@ -69,7 +73,7 @@ export default function ConfirmDialog({
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.97 }}
                                 transition={{ duration: 0.15 }}
-                                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-500 border border-green-500/30 cursor-pointer"
+                                className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${accent.bg600} ${accent.hoverBg400} border ${accent.border500_30} cursor-pointer`}
                             >
                                 {confirmLabel}
                             </motion.button>

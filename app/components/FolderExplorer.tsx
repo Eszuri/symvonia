@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { getAccent } from '../lib/colors';
 
 export interface FileEntry {
     name: string;
@@ -21,6 +22,8 @@ interface FolderExplorerProps {
     playSong: (file: FileEntry) => void;
     onChangeFolder: () => void;
     musicFolder: string;
+    resetSidebarToken: number;
+    accentColor: string;
 }
 
 const MIN_WIDTH = 200;
@@ -47,7 +50,10 @@ export default function FolderExplorer({
     playSong,
     onChangeFolder,
     musicFolder,
+    resetSidebarToken,
+    accentColor,
 }: FolderExplorerProps) {
+    const accent = getAccent(accentColor);
     const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
     const isDraggingRef = useRef(false);
     const startXRef = useRef(0);
@@ -56,6 +62,12 @@ export default function FolderExplorer({
     useEffect(() => {
         setWidth(loadSavedWidth());
     }, []);
+
+    useEffect(() => {
+        if (resetSidebarToken === 0) return;
+        setWidth(DEFAULT_WIDTH);
+        window.localStorage.removeItem(STORAGE_KEY);
+    }, [resetSidebarToken]);
 
     useEffect(() => {
         if (width === DEFAULT_WIDTH) return;
@@ -157,7 +169,7 @@ export default function FolderExplorer({
                                     whileHover={{ x: 2 }}
                                     whileTap={{ scale: 0.98 }}
                                     className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer ${isSelected
-                                        ? 'bg-green-500/10 text-green-400 border-l-2 border-green-500'
+                                        ? `${accent.bg10} ${accent.text400} border-l-2 ${accent.border500}`
                                         : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent'
                                         }`}
                                 >
@@ -186,7 +198,13 @@ export default function FolderExplorer({
             </div>
             <div
                 onMouseDown={onMouseDown}
-                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-green-500/30 active:bg-green-500/50 transition-colors"
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = accent.hex400 + '40';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '';
+                }}
+                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize transition-colors"
             />
         </aside>
     );

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { getAccent } from '../lib/colors';
 
 type SectionId = 'general' | 'sort' | 'style' | 'about';
 
@@ -59,9 +60,50 @@ const SECTIONS: SectionDef[] = [
 interface SettingsModalProps {
     open: boolean;
     onClose: () => void;
+    musicFolder: string | null;
+    onChangeFolder: () => void;
+    autoWallpaper: boolean;
+    setAutoWallpaper: (v: boolean) => void;
+    resetOnClose: boolean;
+    setResetOnClose: (v: boolean) => void;
+    folderSort: string;
+    setFolderSort: (v: string) => void;
+    fileSort: string;
+    setFileSort: (v: string) => void;
+    sortDir: string;
+    setSortDir: (v: string) => void;
+    theme: string;
+    setTheme: (v: string) => void;
+    accentColor: string;
+    setAccentColor: (v: string) => void;
+    customAccentHex: string;
+    setCustomAccentHex: (v: string) => void;
+    onResetSidebarWidth: () => void;
 }
 
-export default function SettingsModal({ open, onClose }: SettingsModalProps) {
+export default function SettingsModal({
+    open,
+    onClose,
+    musicFolder,
+    onChangeFolder,
+    autoWallpaper,
+    setAutoWallpaper,
+    resetOnClose,
+    setResetOnClose,
+    folderSort,
+    setFolderSort,
+    fileSort,
+    setFileSort,
+    sortDir,
+    setSortDir,
+    theme,
+    setTheme,
+    accentColor,
+    setAccentColor,
+    customAccentHex,
+    setCustomAccentHex,
+    onResetSidebarWidth,
+}: SettingsModalProps) {
     const [activeSection, setActiveSection] = useState<SectionId>('general');
 
     useEffect(() => {
@@ -102,6 +144,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </h3>
                     {SECTIONS.map((s) => {
                         const isActive = s.id === activeSection;
+                        const a = getAccent(accentColor);
                         return (
                             <motion.button
                                 key={s.id}
@@ -110,7 +153,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                                 whileTap={{ scale: 0.97 }}
                                 transition={{ duration: 0.15 }}
                                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left cursor-pointer ${isActive
-                                        ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                                        ? `${a.bg15} ${a.text400} border ${a.border500_20}`
                                         : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 border border-transparent'
                                     }`}
                             >
@@ -138,9 +181,38 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                         </button>
                     </header>
                     <div className="flex-1 overflow-y-auto p-6">
-                        {activeSection === 'general' && <GeneralSection />}
-                        {activeSection === 'sort' && <SortSection />}
-                        {activeSection === 'style' && <StyleSection />}
+                        {activeSection === 'general' && (
+                            <GeneralSection
+                                musicFolder={musicFolder}
+                                onChangeFolder={onChangeFolder}
+                                autoWallpaper={autoWallpaper}
+                                setAutoWallpaper={setAutoWallpaper}
+                                resetOnClose={resetOnClose}
+                                setResetOnClose={setResetOnClose}
+                                accentColor={accentColor}
+                            />
+                        )}
+                        {activeSection === 'sort' && (
+                            <SortSection
+                                folderSort={folderSort}
+                                setFolderSort={setFolderSort}
+                                fileSort={fileSort}
+                                setFileSort={setFileSort}
+                                sortDir={sortDir}
+                                setSortDir={setSortDir}
+                            />
+                        )}
+                        {activeSection === 'style' && (
+                            <StyleSection
+                                theme={theme}
+                                setTheme={setTheme}
+                                accentColor={accentColor}
+                                setAccentColor={setAccentColor}
+                                customAccentHex={customAccentHex}
+                                setCustomAccentHex={setCustomAccentHex}
+                                onResetSidebarWidth={onResetSidebarWidth}
+                            />
+                        )}
                         {activeSection === 'about' && <AboutSection />}
                     </div>
                 </div>
@@ -150,81 +222,215 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     );
 }
 
-function GeneralSection() {
+function GeneralSection({
+    musicFolder,
+    onChangeFolder,
+    autoWallpaper,
+    setAutoWallpaper,
+    resetOnClose,
+    setResetOnClose,
+    accentColor,
+}: {
+    musicFolder: string | null;
+    onChangeFolder: () => void;
+    autoWallpaper: boolean;
+    setAutoWallpaper: (v: boolean) => void;
+    resetOnClose: boolean;
+    setResetOnClose: (v: boolean) => void;
+    accentColor: string;
+}) {
+    const accent = getAccent(accentColor);
     return (
         <div className="space-y-6">
             <SettingRow
                 title="Folder Musik"
                 description="Folder tempat koleksi musik kamu disimpan"
             >
-                <div className="text-xs text-zinc-500 font-mono">—</div>
+                <div className="flex items-center gap-2 max-w-[260px]">
+                    <div
+                        className="text-xs text-zinc-400 font-mono truncate flex-1"
+                        title={musicFolder ?? ''}
+                    >
+                        {musicFolder ?? '—'}
+                    </div>
+                    <button
+                        onClick={onChangeFolder}
+                        className="px-2.5 py-1 rounded-md text-[11px] font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 transition-colors cursor-pointer shrink-0"
+                    >
+                        Ganti
+                    </button>
+                </div>
             </SettingRow>
             <SettingRow
                 title="Auto Wallpaper"
                 description="Gunakan cover art sebagai wallpaper desktop saat lagu diputar"
             >
-                <ToggleStub />
+                <ToggleStub checked={autoWallpaper} onChange={setAutoWallpaper} accent={accent} />
             </SettingRow>
             <SettingRow
                 title="Reset Wallpaper on Close"
                 description="Kembalikan wallpaper ke default saat aplikasi ditutup"
             >
-                <ToggleStub checked />
+                <ToggleStub checked={resetOnClose} onChange={setResetOnClose} accent={accent} />
             </SettingRow>
         </div>
     );
 }
 
-function SortSection() {
+function SortSection({
+    folderSort,
+    setFolderSort,
+    fileSort,
+    setFileSort,
+    sortDir,
+    setSortDir,
+}: {
+    folderSort: string;
+    setFolderSort: (v: string) => void;
+    fileSort: string;
+    setFileSort: (v: string) => void;
+    sortDir: string;
+    setSortDir: (v: string) => void;
+}) {
     return (
         <div className="space-y-6">
             <SettingRow
                 title="Urutkan Folder"
                 description="Susunan folder di file explorer"
             >
-                <SelectStub options={['Modified Time', 'Name']} />
+                <SelectStub
+                    options={[['mtime', 'Modified Time'], ['name', 'Name']]}
+                    value={folderSort}
+                    onChange={setFolderSort}
+                />
             </SettingRow>
             <SettingRow
                 title="Urutkan File"
                 description="Susunan file audio di file explorer"
             >
-                <SelectStub options={['Modified Time', 'Name']} />
+                <SelectStub
+                    options={[['mtime', 'Modified Time'], ['name', 'Name']]}
+                    value={fileSort}
+                    onChange={setFileSort}
+                />
             </SettingRow>
             <SettingRow
                 title="Arah Urutan"
                 description="Naik atau turun"
             >
-                <SelectStub options={['Ascending', 'Descending']} />
+                <SelectStub
+                    options={[['asc', 'Ascending'], ['desc', 'Descending']]}
+                    value={sortDir}
+                    onChange={setSortDir}
+                />
             </SettingRow>
         </div>
     );
 }
 
-function StyleSection() {
+function StyleSection({
+    theme,
+    setTheme,
+    accentColor,
+    setAccentColor,
+    customAccentHex,
+    setCustomAccentHex,
+    onResetSidebarWidth,
+}: {
+    theme: string;
+    setTheme: (v: string) => void;
+    accentColor: string;
+    setAccentColor: (v: string) => void;
+    customAccentHex: string;
+    setCustomAccentHex: (v: string) => void;
+    onResetSidebarWidth: () => void;
+}) {
+    const swatches: { id: string; bg: string }[] = [
+        { id: 'green', bg: 'bg-green-500' },
+        { id: 'emerald', bg: 'bg-emerald-500' },
+        { id: 'teal', bg: 'bg-teal-500' },
+        { id: 'cyan', bg: 'bg-cyan-500' },
+        { id: 'blue', bg: 'bg-blue-500' },
+        { id: 'indigo', bg: 'bg-indigo-500' },
+        { id: 'purple', bg: 'bg-purple-500' },
+        { id: 'pink', bg: 'bg-pink-500' },
+        { id: 'rose', bg: 'bg-rose-500' },
+        { id: 'red', bg: 'bg-red-500' },
+        { id: 'orange', bg: 'bg-orange-500' },
+        { id: 'amber', bg: 'bg-amber-500' },
+        { id: 'yellow', bg: 'bg-yellow-500' },
+        { id: 'lime', bg: 'bg-lime-500' },
+    ];
     return (
         <div className="space-y-6">
             <SettingRow
                 title="Tema"
                 description="Tampilan warna antarmuka"
             >
-                <SelectStub options={['Dark (Default)', 'Light']} />
+                <SelectStub
+                    options={[['dark', 'Dark (Default)'], ['light', 'Light']]}
+                    value={theme}
+                    onChange={setTheme}
+                />
             </SettingRow>
             <SettingRow
                 title="Accent Color"
-                description="Warna aksen (saat ini hijau)"
+                description="Warna aksen aplikasi"
             >
-                <div className="flex gap-2">
-                    <div className="w-6 h-6 rounded-full bg-green-500 border-2 border-zinc-100 cursor-pointer" />
-                    <div className="w-6 h-6 rounded-full bg-blue-500 opacity-50 cursor-pointer" />
-                    <div className="w-6 h-6 rounded-full bg-purple-500 opacity-50 cursor-pointer" />
-                    <div className="w-6 h-6 rounded-full bg-pink-500 opacity-50 cursor-pointer" />
+                <div className="flex flex-wrap gap-2 max-w-[320px]">
+                    {swatches.map((s) => {
+                        const active = accentColor === s.id;
+                        return (
+                            <button
+                                key={s.id}
+                                onClick={() => setAccentColor(s.id)}
+                                className={`w-6 h-6 rounded-full ${s.bg} cursor-pointer transition-all ${active
+                                        ? 'border-2 border-zinc-100 scale-110'
+                                        : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
+                                    }`}
+                                aria-label={s.id}
+                            />
+                        );
+                    })}
+                    <button
+                        onClick={() => setAccentColor('custom')}
+                        className={`w-6 h-6 rounded-full cursor-pointer transition-all flex items-center justify-center ${accentColor === 'custom'
+                                ? 'border-2 border-zinc-100 scale-110'
+                                : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
+                            }`}
+                        style={{ background: customAccentHex }}
+                        aria-label="custom"
+                        title="Custom"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white/80">
+                            <path d="M12 5v14M5 12h14" />
+                        </svg>
+                    </button>
                 </div>
+                {accentColor === 'custom' && (
+                    <div className="flex items-center gap-2 mt-2">
+                        <input
+                            type="color"
+                            value={customAccentHex}
+                            onChange={(e) => {
+                                setCustomAccentHex(e.target.value);
+                            }}
+                            className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
+                        />
+                        <span className="text-xs text-zinc-500 font-mono">{customAccentHex}</span>
+                    </div>
+                )}
             </SettingRow>
             <SettingRow
                 title="Lebar Sidebar"
                 description="Drag handle di samping kanan sidebar untuk menyesuaikan"
             >
-                <div className="text-xs text-zinc-500">288px (default)</div>
+                <button
+                    onClick={onResetSidebarWidth}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 transition-colors cursor-pointer"
+                >
+                    Reset ke default
+                </button>
             </SettingRow>
         </div>
     );
@@ -270,24 +476,45 @@ function SettingRow({
     );
 }
 
-function ToggleStub({ checked = false }: { checked?: boolean }) {
+function ToggleStub({ checked = false, onChange, accent }: { checked?: boolean; onChange?: (v: boolean) => void; accent: Record<string, string> }) {
     return (
-        <div
-            className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${checked ? 'bg-green-500' : 'bg-zinc-700'
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            onClick={() => onChange?.(!checked)}
+            className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${checked ? accent.bg500 : 'bg-zinc-700'
                 }`}
         >
             <div
                 className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'
                     }`}
             />
-        </div>
+        </button>
     );
 }
 
-function SelectStub({ options }: { options: string[] }) {
+function SelectStub({
+    options,
+    value,
+    onChange,
+}: {
+    options: [string, string][];
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const current = options.find(([v]) => v === value) ?? options[0];
     return (
-        <div className="px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-xs text-zinc-300 cursor-pointer min-w-[140px]">
-            {options[0]}
-        </div>
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-xs text-zinc-300 cursor-pointer min-w-[140px] outline-none hover:bg-zinc-700/70 focus:bg-zinc-700/70 transition-colors"
+        >
+            {options.map(([v, label]) => (
+                <option key={v} value={v} className="bg-zinc-900 text-zinc-200">
+                    {label}
+                </option>
+            ))}
+        </select>
     );
 }

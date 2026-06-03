@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 #[cfg(windows)]
@@ -34,6 +35,13 @@ struct FileEntry {
     mtime: u64,
 }
 
+static RESET_ON_CLOSE: AtomicBool = AtomicBool::new(true);
+
+#[tauri::command]
+fn set_reset_on_close(enabled: bool) {
+    RESET_ON_CLOSE.store(enabled, Ordering::SeqCst);
+}
+
 #[derive(Serialize)]
 struct SongMetadata {
     title: Option<String>,
@@ -55,7 +63,12 @@ async fn pick_folder() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn list_files(path: String) -> Result<Vec<FileEntry>, String> {
+fn list_files(
+    path: String,
+    folder_sort: String,
+    file_sort: String,
+    sort_dir: String,
+) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| format!("Gagal membaca folder: {}", e))?;
 
     let mut files: Vec<FileEntry> = Vec::new();
@@ -102,7 +115,13 @@ fn list_files(path: String) -> Result<Vec<FileEntry>, String> {
         if a.is_dir != b.is_dir {
             b.is_dir.cmp(&a.is_dir)
         } else {
-            a.mtime.cmp(&b.mtime)
+            let key_a = if a.is_dir { &folder_sort } else { &file_sort };
+            let key_b = if b.is_dir { &folder_sort } else { &file_sort };
+            let cmp = match (key_a.as_str(), key_b.as_str()) {
+                ("name", "name") => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                _ => a.mtime.cmp(&b.mtime),
+            };
+            if sort_dir == "desc" { cmp.reverse() } else { cmp }
         }
     });
 
@@ -227,7 +246,8 @@ pub fn run() {
             get_metadata,
             set_wallpaper,
             clear_wallpaper,
-            pick_folder
+            pick_folder,
+            set_reset_on_close
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -251,8 +271,10 @@ pub fn run() {
     app.run(|_handle, event| {
         #[cfg(windows)]
         if let tauri::RunEvent::Exit = event {
-            if let Ok(path) = generate_default_wallpaper() {
-                let _ = apply_wallpaper(&path);
+            if RESET_ON_CLOSE.load(Ordering::SeqCst) {
+                if let Ok(path) = generate_default_wallpaper() {
+                    let _ = apply_wallpaper(&path);
+                }
             }
         }
     });
