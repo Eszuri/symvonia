@@ -397,7 +397,7 @@ function SortSection({
                 description="Susunan folder di file explorer"
             >
                 <SelectStub
-                    options={[['mtime', 'Modified Time'], ['name', 'Name']]}
+                    options={[['name', 'Name'], ['mtime', 'Modified Time'], ['ctime', 'Created Time']]}
                     value={folderSort}
                     onChange={setFolderSort}
                 />
@@ -407,7 +407,7 @@ function SortSection({
                 description="Susunan file audio di file explorer"
             >
                 <SelectStub
-                    options={[['mtime', 'Modified Time'], ['name', 'Name']]}
+                    options={[['name', 'Name'], ['mtime', 'Modified Time'], ['size', 'Size'], ['ext', 'Type'], ['ctime', 'Created Time']]}
                     value={fileSort}
                     onChange={setFileSort}
                 />

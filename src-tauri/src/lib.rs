@@ -34,6 +34,8 @@ struct FileEntry {
     is_dir: bool,
     ext: String,
     mtime: u64,
+    size: u64,
+    ctime: u64,
 }
 
 static RESET_ON_CLOSE: AtomicBool = AtomicBool::new(true);
@@ -125,6 +127,13 @@ fn list_files(
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
+            let ctime = metadata
+                .created()
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let size = metadata.len();
 
             files.push(FileEntry {
                 name,
@@ -132,6 +141,8 @@ fn list_files(
                 is_dir,
                 ext,
                 mtime,
+                size,
+                ctime,
             });
         }
     }
@@ -140,10 +151,12 @@ fn list_files(
         if a.is_dir != b.is_dir {
             b.is_dir.cmp(&a.is_dir)
         } else {
-            let key_a = if a.is_dir { &folder_sort } else { &file_sort };
-            let key_b = if b.is_dir { &folder_sort } else { &file_sort };
-            let cmp = match (key_a.as_str(), key_b.as_str()) {
-                ("name", "name") => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            let key = if a.is_dir { &folder_sort } else { &file_sort };
+            let cmp = match key.as_str() {
+                "name" => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                "size" => a.size.cmp(&b.size),
+                "ext" => a.ext.cmp(&b.ext),
+                "ctime" => a.ctime.cmp(&b.ctime),
                 _ => a.mtime.cmp(&b.mtime),
             };
             if sort_dir == "desc" { cmp.reverse() } else { cmp }

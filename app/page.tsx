@@ -127,8 +127,8 @@ export default function Home() {
     }, [addLog]);
     const [autoWallpaper, setAutoWallpaperState] = useState(true);
     const [resetOnClose, setResetOnCloseState] = useState(true);
-    const [folderSort, setFolderSortState] = useState('mtime');
-    const [fileSort, setFileSortState] = useState('mtime');
+    const [folderSort, setFolderSortState] = useState('name');
+    const [fileSort, setFileSortState] = useState('name');
     const [sortDir, setSortDirState] = useState('asc');
     const [formats, setFormatsState] = useState<string[]>(DEFAULT_FORMATS);
     const [theme, setThemeState] = useState('dark');
@@ -143,8 +143,8 @@ export default function Home() {
     const playlistRef = useRef<FileEntry[]>([]);
     const volumeRef = useRef<number>(volume);
     const autoWallpaperRef = useRef<boolean>(autoWallpaper);
-    const folderSortRef = useRef<string>('mtime');
-    const fileSortRef = useRef<string>('mtime');
+    const folderSortRef = useRef<string>('name');
+    const fileSortRef = useRef<string>('name');
     const sortDirRef = useRef<string>('asc');
     const formatsRef = useRef<string[]>(DEFAULT_FORMATS);
 
