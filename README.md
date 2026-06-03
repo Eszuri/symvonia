@@ -10,7 +10,6 @@
 <p align="center">
   <img src="screenshots/hero.png" alt="Symvonia Screenshot" width="100%" />
   <br/>
-  <sub>⬆ Ganti docs/screenshots/hero.png dengan screenshot atau GIF demo aplikasi kamu</sub>
 </p>
 
 ---
@@ -135,8 +134,6 @@ Output installer ada di `src-tauri/target/release/bundle/`.
   <img src="screenshots/player.png" alt="Player View" width="49%" />
   <img src="screenshots/settings.png" alt="Settings" width="49%" />
 </p>
-
-> Tambahkan screenshot kamu di folder `docs/screenshots/`.
 
 ---
 
