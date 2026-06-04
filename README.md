@@ -3,9 +3,10 @@
   <img src="public/icon.png" alt="Symvonia" width="96" />
 </picture>
 
-# Symvonia
+# Symvonia — Desktop Music Player for Windows
 
-> Desktop music player yang mengubah desktop kamu mengikuti musik.
+**Symvonia** is a free, open-source desktop music player for Windows 
+built with Tauri, Rust, and Next.js.
 
 <p align="center">
   <img src="screenshots/hero.png" alt="Symvonia Screenshot" width="100%" />
