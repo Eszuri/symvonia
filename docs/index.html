@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Symvonia — Desktop Music Player dengan Auto Wallpaper</title>
+  <meta name="description"
+    content="Symvonia adalah desktop music player untuk Windows yang mengubah wallpaper desktop mengikuti cover art lagu. Auto-wallpaper, metadata lengkap, 14 warna aksen, dan UI modern.">
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --zinc-950: #09090b;
+      --zinc-900: #18181b;
+      --zinc-800: #27272a;
+      --zinc-700: #3f3f46;
+      --zinc-600: #52525b;
+      --zinc-500: #71717a;
+      --zinc-400: #a1a1aa;
+      --zinc-300: #d4d4d8;
+      --zinc-200: #e4e4e7;
+      --zinc-100: #f4f4f5;
+      --accent: #22c55e;
+      --accent-light: #4ade80;
+      --accent-dark: #16a34a;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom, var(--zinc-950), #000);
+      color: var(--zinc-100);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--accent-light);
+    }
+
+    img {
+      max-width: 100%;
+      display: block;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-icon {
+      width: 96px;
+      height: 96px;
+      border-radius: 24px;
+      background: var(--zinc-800);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 32px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-icon img {
+      width: 64px;
+      height: 64px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-tagline {
+      font-size: clamp(1.1rem, 2vw, 1.3rem);
+      color: var(--zinc-400);
+      max-width: 600px;
+      margin-bottom: 40px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-tagline strong {
+      color: var(--accent-light);
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--zinc-950);
+      box-shadow: 0 4px 20px rgba(34, 197, 94, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-light);
+      transform: translateY(-1px);
+      color: var(--zinc-950);
+    }
+
+    .btn-secondary {
+      background: rgba(63, 63, 70, 0.5);
+      color: var(--zinc-300);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(63, 63, 70, 0.8);
+      color: var(--zinc-100);
+    }
+
+    .hero-screenshot {
+      display: flex;
+      justify-content: center;
+      margin-top: 64px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      max-width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-screenshot img {
+      width: 80%;
+    }
+
+    /* Sections */
+    .section {
+      padding: 80px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .section-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .section h2 {
+      font-size: clamp(1.8rem, 3vw, 2.4rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    .section>.container>p {
+      color: var(--zinc-400);
+      font-size: 1.05rem;
+      max-width: 640px;
+      margin-bottom: 48px;
+    }
+
+    /* Feature grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: rgba(24, 24, 27, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .feature-card .icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--zinc-400);
+      line-height: 1.6;
+    }
+
+    .feature-card ul {
+      list-style: none;
+      margin-top: 12px;
+    }
+
+    .feature-card li {
+      font-size: 0.88rem;
+      color: var(--zinc-400);
+      padding: 3px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .feature-card li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 10px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0.5;
+    }
+
+    /* Keyboard table */
+    .shortcuts-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .shortcuts-table th {
+      background: rgba(24, 24, 27, 0.8);
+      padding: 14px 20px;
+      text-align: left;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--zinc-400);
+    }
+
+    .shortcuts-table td {
+      padding: 12px 20px;
+      font-size: 0.9rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .shortcuts-table td:first-child {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: var(--accent-light);
+      font-weight: 500;
+    }
+
+    .shortcuts-table tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    /* Color swatches */
+    .color-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .color-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--zinc-700);
+      cursor: default;
+      transition: transform 0.2s, border-color 0.2s;
+      position: relative;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.15);
+      border-color: var(--zinc-300);
+    }
+
+    .color-swatch .name {
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      color: var(--zinc-500);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .color-swatch:hover .name {
+      opacity: 1;
+    }
+
+    /* Settings list */
+    .settings-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .setting-item {
+      background: rgba(24, 24, 27, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .setting-item h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .setting-item p {
+      font-size: 0.8rem;
+      color: var(--zinc-500);
+      margin-bottom: 8px;
+    }
+
+    .setting-item .opts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .setting-item .opt {
+      font-size: 0.72rem;
+      background: rgba(63, 63, 70, 0.4);
+      color: var(--zinc-400);
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* Tech badges */
+    .tech-section {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-top: 24px;
+    }
+
+    .tech-block {
+      background: rgba(24, 24, 27, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .tech-block h4 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--zinc-400);
+      margin-bottom: 16px;
+    }
+
+    .tech-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tech-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(63, 63, 70, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.82rem;
+      color: var(--zinc-300);
+    }
+
+    .tech-badge .ver {
+      font-size: 0.72rem;
+      color: var(--zinc-500);
+    }
+
+    /* Steps */
+    .steps {
+      margin-top: 24px;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      padding: 24px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .step:last-child {
+      border-bottom: none;
+    }
+
+    .step-num {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .step-body h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .step-body p {
+      font-size: 0.9rem;
+      color: var(--zinc-400);
+    }
+
+    /* Screenshots gallery */
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 24px;
+      margin-top: 32px;
+    }
+
+    .screenshot-card {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: var(--zinc-900);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .screenshot-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    }
+
+    .screenshot-card img {
+      width: 100%;
+      display: block;
+    }
+
+    .screenshot-card .label {
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      color: var(--zinc-400);
+      background: rgba(24, 24, 27, 0.8);
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    /* Footer */
+    footer {
+      padding: 48px 24px;
+      text-align: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--zinc-500);
+      font-size: 0.85rem;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--zinc-700);
+      border-radius: 3px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero {
+        padding: 60px 16px;
+      }
+
+      .hero-icon {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+      }
+
+      .hero-icon img {
+        width: 48px;
+        height: 48px;
+      }
+
+      .section {
+        padding: 56px 0;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .btn {
+        padding: 12px 22px;
+        font-size: 0.9rem;
+      }
+
+      .screenshots-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    as="style" onload="this.onload=null;this.rel='stylesheet'">
+</head>
+
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-icon">
+      <img src="../public/icon.png" alt="Symvonia">
+    </div>
+    <h1>Symvonia</h1>
+    <p class="hero-tagline">
+      Desktop music player yang <strong>mengubah wallpaper desktop kamu mengikuti musik.</strong><br>
+      Auto-wallpaper dari cover art, metadata lengkap, dan UI modern dengan 14 warna aksen.
+    </p>
+    <div class="hero-buttons">
+      <a href="https://github.com/eszuri/symvonia/releases/latest" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Download untuk Windows
+      </a>
+      <a href="https://github.com/eszuri/symvonia" class="btn btn-secondary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path
+            d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+        </svg>
+        GitHub
+      </a>
+    </div>
+    <div class="hero-screenshot">
+      <img src="../screenshots/hero.png" alt="Symvonia Screenshot">
+    </div>
+  </section>
+
+  <!-- Fitur Utama -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Fitur</div>
+      <h2>Semua yang Kamu Butuhkan dalam Satu Aplikasi</h2>
+      <p>Symvonia menggabungkan pemutaran musik, metadata audio, dan wallpaper desktop otomatis dalam antarmuka yang
+        bersih dan modern.</p>
+      <div class="features-grid">
+
+        <div class="feature-card">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linecap="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          </div>
+          <h3>Playback Lengkap</h3>
+          <p>Play, Pause, Next, Previous dengan Shuffle dan Repeat (Off / All / One). Auto-advance ke lagu berikutnya
+            dan playlist tetap berjalan meskipun kamu navigasi ke folder lain.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </div>
+          <h3>Auto Wallpaper</h3>
+          <p>Cover art dari file audio otomatis menjadi wallpaper desktop. Bisa diaktifkan/dimatikan, dan kamu bisa
+            memilih gambar default sendiri untuk dipakai saat lagu tanpa cover.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <h3>Eksplorasi File</h3>
+          <p>Pilih folder musik mana saja di komputer. Masuk ke subfolder, kembali ke induk, filter format file, dan
+            urutkan berdasarkan nama, tanggal, ukuran, atau tipe file.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linecap="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
+            </svg>
+          </div>
+          <h3>Metadata Lengkap</h3>
+          <p>Info lagu (judul, artis, album, genre, tahun, track, disc), info teknis (bitrate, sample rate, channel,
+            durasi), info file, dan komentar tertampil di panel detail.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z" />
+            </svg>
+          </div>
+          <h3>14 Warna Aksen</h3>
+          <p>Pilih dari 14 preset warna (Green, Blue, Purple, Pink, Red, Orange, Yellow, Teal, Cyan, Indigo, Rose, Lime,
+            Amber, Emerald) atau buat warna custom dengan color picker.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z" />
+            </svg>
+          </div>
+          <h3>Auto Update</h3>
+          <p>Symvonia bisa memeriksa dan menginstall update secara otomatis langsung dari aplikasi. Cukup klik Check for
+            Update di Settings.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Keyboard Shortcuts -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Shortcuts</div>
+      <h2>Keyboard Shortcuts</h2>
+      <p>Kontrol musik tanpa menyentuh mouse. Semua shortcut berfungsi selama kamu tidak sedang mengetik di input field.
+      </p>
+      <table class="shortcuts-table">
+        <thead>
+          <tr>
+            <th>Tombol</th>
+            <th>Fungsi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Space</td>
+            <td>Play / Pause</td>
+          </tr>
+          <tr>
+            <td>N</td>
+            <td>Lagu berikutnya</td>
+          </tr>
+          <tr>
+            <td>P</td>
+            <td>Lagu sebelumnya</td>
+          </tr>
+          <tr>
+            <td>&rarr;</td>
+            <td>Volume naik (+5%)</td>
+          </tr>
+          <tr>
+            <td>&larr;</td>
+            <td>Volume turun (-5%)</td>
+          </tr>
+          <tr>
+            <td>F12</td>
+            <td>Buka DevTools (debug)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Pengaturan -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Settings</div>
+      <h2>Pengaturan Lengkap</h2>
+      <p>Semua preferensi disimpan otomatis. Tidak perlu setting ulang setiap kali buka aplikasi.</p>
+      <div class="settings-list">
+
+        <div class="setting-item">
+          <h4>General</h4>
+          <p>Konfigurasi utama aplikasi</p>
+          <div class="opts">
+            <span class="opt">Folder Musik</span>
+            <span class="opt">Auto Wallpaper</span>
+            <span class="opt">Default Wallpaper</span>
+            <span class="opt">Reset on Close</span>
+            <span class="opt">Check for Update</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <h4>Sort</h4>
+          <p>Urutan file dan folder di sidebar</p>
+          <div class="opts">
+            <span class="opt">Urutkan Folder</span>
+            <span class="opt">Urutkan File</span>
+            <span class="opt">Arah Urutan</span>
+            <span class="opt">Format File</span>
+            <span class="opt">Custom Format</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <h4>Style</h4>
+          <p>Kustomisasi tampilan antarmuka</p>
+          <div class="opts">
+            <span class="opt">Tema (Dark/Light)</span>
+            <span class="opt">14 Warna Aksen</span>
+            <span class="opt">Custom Hex Color</span>
+            <span class="opt">Reset Lebar Sidebar</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <h4>Debug</h4>
+          <p>Log viewer untuk troubleshooting</p>
+          <div class="opts">
+            <span class="opt">Real-time Log</span>
+            <span class="opt">Error/Warn/Info</span>
+            <span class="opt">Auto-scroll</span>
+            <span class="opt">500 Entries</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Accent Colors -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Kustomisasi</div>
+      <h2>14 Warna Aksen + Custom</h2>
+      <p>Pilih warna aksen yang paling cocok dengan selera kamu. Semua elemen UI — tombol, border, text, shadow, glow —
+        akan menyesuaikan otomatis.</p>
+      <div class="color-grid">
+        <div class="color-swatch" style="background:#22c55e" title="Green"><span class="name">Green</span></div>
+        <div class="color-swatch" style="background:#10b981" title="Emerald"><span class="name">Emerald</span></div>
+        <div class="color-swatch" style="background:#14b8a6" title="Teal"><span class="name">Teal</span></div>
+        <div class="color-swatch" style="background:#06b6d4" title="Cyan"><span class="name">Cyan</span></div>
+        <div class="color-swatch" style="background:#3b82f6" title="Blue"><span class="name">Blue</span></div>
+        <div class="color-swatch" style="background:#6366f1" title="Indigo"><span class="name">Indigo</span></div>
+        <div class="color-swatch" style="background:#a855f7" title="Purple"><span class="name">Purple</span></div>
+        <div class="color-swatch" style="background:#ec4899" title="Pink"><span class="name">Pink</span></div>
+        <div class="color-swatch" style="background:#f43f5e" title="Rose"><span class="name">Rose</span></div>
+        <div class="color-swatch" style="background:#ef4444" title="Red"><span class="name">Red</span></div>
+        <div class="color-swatch" style="background:#f97316" title="Orange"><span class="name">Orange</span></div>
+        <div class="color-swatch" style="background:#f59e0b" title="Amber"><span class="name">Amber</span></div>
+        <div class="color-swatch" style="background:#eab308" title="Yellow"><span class="name">Yellow</span></div>
+        <div class="color-swatch" style="background:#84cc16" title="Lime"><span class="name">Lime</span></div>
+        <div class="color-swatch"
+          style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border-radius:50%" title="Custom">
+          <span class="name">Custom</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Teknologi</div>
+      <h2>Tech Stack</h2>
+      <p>Dibangun dengan teknologi modern untuk performa desktop native.</p>
+      <div class="tech-section">
+        <div class="tech-block">
+          <h4>Frontend</h4>
+          <div class="tech-badges">
+            <span class="tech-badge">Next.js <span class="ver">16.2</span></span>
+            <span class="tech-badge">React <span class="ver">19.2</span></span>
+            <span class="tech-badge">TypeScript <span class="ver">5</span></span>
+            <span class="tech-badge">Tailwind CSS <span class="ver">v4</span></span>
+            <span class="tech-badge">Framer Motion <span class="ver">12.4</span></span>
+          </div>
+        </div>
+        <div class="tech-block">
+          <h4>Backend — Rust</h4>
+          <div class="tech-badges">
+            <span class="tech-badge">Tauri <span class="ver">2.11</span></span>
+            <span class="tech-badge">Lofty <span class="ver">0.22</span></span>
+            <span class="tech-badge">image <span class="ver">0.25</span></span>
+            <span class="tech-badge">rfd <span class="ver">0.15</span></span>
+            <span class="tech-badge">base64 <span class="ver">0.22</span></span>
+            <span class="tech-badge">serde <span class="ver">1.0</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cara Pakai -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Panduan</div>
+      <h2>Cara Menggunakan</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Buka Symvonia</h4>
+            <p>Aplikasi akan menampilkan halaman welcome dengan tombol besar untuk memilih folder musik kamu.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Pilih Folder Musik</h4>
+            <p>Klik tombol <strong>Pilih Folder Musik</strong> dan arahkan ke folder tempat kamu menyimpan koleksi
+              audio. Semua file audio (.mp3, .flac, .ogg, dll) akan muncul di sidebar.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>Mulai Memutar</h4>
+            <p>Double-click file audio dari daftar di sidebar kiri. Lagu akan diputar dan metadata (cover art, judul,
+              artis, dll) akan tertampil di panel utama.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h4>Nikmati Auto-Wallpaper</h4>
+            <p>Cover art dari lagu yang sedang diputar otomatis menjadi wallpaper desktop kamu. Ubah wallpaper kapan
+              saja via Settings.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Galeri</div>
+      <h2>Screenshots</h2>
+      <p>Tampilan antarmuka Symvonia dengan berbagai fitur dan kustomisasi.</p>
+      <div class="screenshots-grid">
+        <div class="screenshot-card">
+          <img src="../screenshots/player.png" alt="Player View">
+          <div class="label">Player View — Tampilan utama dengan cover art, kontrol playback, dan seek bar</div>
+        </div>
+        <div class="screenshot-card">
+          <img src="../screenshots/settings.png" alt="Settings">
+          <div class="label">Settings — Pengaturan lengkap dengan 5 section: General, Sort, Style, Debug, About</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Instalasi -->
+  <section class="section">
+    <div class="container">
+      <div class="section-label">Instalasi</div>
+      <h2>Download & Install</h2>
+      <p>Symvonia tersedia untuk Windows. Download installer dan jalankan — tidak perlu konfigurasi tambahan.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:32px">
+        <a href="https://github.com/eszuri/symvonia/releases/latest" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Download Installer (.msi)
+        </a>
+        <a href="https://github.com/eszuri/symvonia" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path
+              d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+          </svg>
+          Lihat di GitHub
+        </a>
+      </div>
+      <div
+        style="margin-top:24px;padding:20px;background:rgba(24,24,27,0.5);border:1px solid rgba(255,255,255,0.04);border-radius:12px;font-family:monospace;font-size:0.85rem;color:var(--zinc-300);overflow-x:auto">
+        <span style="color:var(--zinc-500)">$</span> git clone https://github.com/eszuri/symvonia.git<br>
+        <span style="color:var(--zinc-500)">$</span> cd symvonia<br>
+        <span style="color:var(--zinc-500)">$</span> npm install<br>
+        <span style="color:var(--zinc-500)">$</span> npm run tauri dev
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Symvonia — Version 0.3.0 — by Eszuri — MIT License</p>
+    <p style="margin-top:4px">Dibangun dengan Next.js SSG + Tauri 2 untuk performa desktop native</p>
+  </footer>
+
+</body>
+
+</html>
