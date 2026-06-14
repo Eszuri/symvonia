@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
@@ -14,7 +14,7 @@ use lofty::file::TaggedFileExt;
 use lofty::read_from_path;
 use lofty::tag::Accessor;
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Url};
 
 #[cfg(windows)]
 #[link(name = "user32")]
@@ -307,6 +307,121 @@ fn set_wallpaper(cover_b64: String) -> Result<(), String> {
     apply_wallpaper(&bmp_path)
 }
 
+#[tauri::command]
+async fn open_webview_stream(
+    app: tauri::AppHandle,
+    url: String,
+    label: String,
+    title: String,
+) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(&label) {
+        let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
+        let _ = window.navigate(parsed);
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    let _window = WebviewWindowBuilder::new(
+        &app,
+        &label,
+        WebviewUrl::External(Url::parse(&url).map_err(|e| e.to_string())?),
+    )
+    .title(&title)
+    .inner_size(1200.0, 800.0)
+    .min_inner_size(800.0, 600.0)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    // Poll URL periodically to catch SPA navigations (pushState/replaceState)
+    // that on_navigation doesn't intercept
+    let app_clone = app.clone();
+    let label_clone = label.clone();
+    std::thread::spawn(move || {
+        let mut last_url: Option<String> = None;
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+            if let Some(w) = app_clone.get_webview_window(&label_clone) {
+                match w.url() {
+                    Ok(current_url) => {
+                        let url_str = current_url.as_str().to_string();
+                        let is_new = match &last_url {
+                            Some(prev) => &url_str != prev,
+                            None => true,
+                        };
+                        if is_new && is_media_url(&url_str) {
+                            let _ = app_clone.emit("stream-url-changed", &url_str);
+                        }
+                        last_url = Some(url_str);
+                    }
+                    Err(_) => {
+                        // webview not ready yet, skip
+                    }
+                }
+            } else {
+                break; // window closed
+            }
+        }
+    });
+
+    Ok(())
+}
+
+fn is_media_url(url: &str) -> bool {
+    if url.contains("youtube.com/watch?v=")
+        || url.contains("youtu.be/")
+        || url.contains("/shorts/")
+    {
+        return true;
+    }
+    if url.contains("music.youtube.com/watch?v=")
+        || url.contains("music.youtube.com/playlist?list=")
+    {
+        return true;
+    }
+    if url.contains("open.spotify.com/track/")
+        || url.contains("open.spotify.com/album/")
+        || url.contains("open.spotify.com/playlist/")
+        || url.contains("open.spotify.com/episode/")
+        || url.contains("open.spotify.com/show/")
+    {
+        return true;
+    }
+    if url.contains("soundcloud.com/") {
+        let path = url.split("soundcloud.com/").nth(1).unwrap_or("");
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.len() >= 2 {
+            return true;
+        }
+    }
+    if url.contains("bandcamp.com/track/")
+        || url.contains(".bandcamp.com/track/")
+        || url.contains("bandcamp.com/album/")
+        || url.contains(".bandcamp.com/album/")
+    {
+        return true;
+    }
+    if url.contains("deezer.com/track/")
+        || url.contains("deezer.com/album/")
+        || url.contains("deezer.com/playlist/")
+    {
+        return true;
+    }
+    if url.contains("tidal.com/track/")
+        || url.contains("tidal.com/album/")
+        || url.contains("tidal.com/playlist/")
+    {
+        return true;
+    }
+    if url.contains("music.apple.com/") {
+        let path_segments: Vec<&str> = url.split('/').filter(|s| !s.is_empty()).collect();
+        if path_segments.iter().any(|s| *s == "album" || *s == "song" || *s == "playlist") {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -319,7 +434,8 @@ pub fn run() {
             pick_wallpaper,
             set_default_wallpaper_path,
             get_default_wallpaper_path,
-            set_reset_on_close
+            set_reset_on_close,
+            open_webview_stream
         ])
         .plugin(tauri_plugin_updater::Builder::default().build())
         .setup(|app| {

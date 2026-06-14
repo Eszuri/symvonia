@@ -7,6 +7,9 @@
   ],
   "permissions": [
     "core:default",
+    "core:event:default",
+    "core:webview:default",
+    "core:webview:allow-create-webview-window",
     "updater:default"
   ]
 }

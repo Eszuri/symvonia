@@ -10,6 +10,7 @@ import VolumeControl from './components/VolumeControl';
 import ConfirmDialog from './components/ConfirmDialog';
 import SettingsModal from './components/SettingsModal';
 import MetadataPanel from './components/MetadataPanel';
+import StreamingModal from './components/StreamingModal';
 import { getAccent, setCustomAccentVars, removeCustomAccentVars } from './lib/colors';
 
 const isBrowserTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -332,6 +333,26 @@ export default function Home() {
         };
     }, []);
 
+    // Stream URL listener — always active even when streaming modal is closed
+    useEffect(() => {
+        if (!isBrowserTauri) return;
+        let unlisten: (() => void) | null = null;
+        import('@tauri-apps/api/event').then(({ listen }) => {
+            listen<string>('stream-url-changed', (event) => {
+                try {
+                    const url = event.payload;
+                    const domain = new URL(url).hostname.replace(/^www\./, '');
+                    const raw = localStorage.getItem('music-app-stream-history');
+                    const entries: Array<{ url: string; timestamp: number; domain: string }> = raw ? JSON.parse(raw) : [];
+                    entries.unshift({ url, timestamp: Date.now(), domain });
+                    const unique = entries.filter((e, i, a) => a.findIndex(x => x.url === e.url) === i).slice(0, 200);
+                    localStorage.setItem('music-app-stream-history', JSON.stringify(unique));
+                } catch {}
+            }).then((fn) => { unlisten = fn; });
+        });
+        return () => { unlisten?.(); };
+    }, []);
+
     useEffect(() => {
         const isInputFocused = () => {
             const el = document.activeElement;
@@ -623,6 +644,7 @@ export default function Home() {
 
     const [pendingFolderChange, setPendingFolderChange] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [streamingOpen, setStreamingOpen] = useState(false);
     const [updateChecking, setUpdateChecking] = useState(false);
     const [updateStatus, setUpdateStatus] = useState('');
 
@@ -728,19 +750,35 @@ export default function Home() {
     return (
         <div className="h-full flex flex-col overflow-hidden bg-linear-to-b from-zinc-950 to-black text-zinc-100 select-none font-sans">
             <header className="flex items-center justify-center px-5 py-3 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm relative">
-                <motion.button
-                    onClick={() => setSettingsOpen(true)}
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute left-5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium cursor-pointer"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                        <circle cx="12" cy="12" r="3" />
-                    </svg>
-                    Setting
-                </motion.button>
+                <div className="absolute left-5 flex items-center gap-1.5">
+                    <motion.button
+                        onClick={() => setStreamingOpen(true)}
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium cursor-pointer"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 11a9 9 0 0 1 9 9" />
+                            <path d="M4 4a16 16 0 0 1 16 16" />
+                            <circle cx="5" cy="19" r="1" />
+                        </svg>
+                        Streaming
+                    </motion.button>
+                    <motion.button
+                        onClick={() => setSettingsOpen(true)}
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium cursor-pointer"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        Setting
+                    </motion.button>
+                </div>
                 {isCompact && musicFolder && (
                     <div className="absolute left-[108px] flex items-center gap-1.5">
                         <motion.button
@@ -955,6 +993,11 @@ export default function Home() {
                 onCheckUpdate={handleCheckUpdate}
                 updateStatus={updateStatus}
                 updateChecking={updateChecking}
+            />
+            <StreamingModal
+                open={streamingOpen}
+                onClose={() => setStreamingOpen(false)}
+                accentColor={accentColor}
             />
 
             <AnimatePresence>
