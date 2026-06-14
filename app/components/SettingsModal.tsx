@@ -172,94 +172,94 @@ export default function SettingsModal({
                     className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/60 w-[min(900px,90vw)] h-[min(560px,80vh)] flex overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                 >
-                {/* Sidebar nav */}
-                <nav className="w-44 border-r border-zinc-800 bg-zinc-950/60 p-3 flex flex-col gap-1">
-                    <h3 className="px-3 py-2 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-                        Settings
-                    </h3>
-                    {SECTIONS.map((s) => {
-                        const isActive = s.id === activeSection;
-                        const a = getAccent(accentColor);
-                        return (
-                            <motion.button
-                                key={s.id}
-                                onClick={() => setActiveSection(s.id)}
-                                whileHover={{ x: 2 }}
-                                whileTap={{ scale: 0.97 }}
-                                transition={{ duration: 0.15 }}
-                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left cursor-pointer ${isActive
+                    {/* Sidebar nav */}
+                    <nav className="w-44 border-r border-zinc-800 bg-zinc-950/60 p-3 flex flex-col gap-1">
+                        <h3 className="px-3 py-2 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                            Settings
+                        </h3>
+                        {SECTIONS.map((s) => {
+                            const isActive = s.id === activeSection;
+                            const a = getAccent(accentColor);
+                            return (
+                                <motion.button
+                                    key={s.id}
+                                    onClick={() => setActiveSection(s.id)}
+                                    whileHover={{ x: 2 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    transition={{ duration: 0.15 }}
+                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left cursor-pointer ${isActive
                                         ? `${a.bg15} ${a.text400} border ${a.border500_20}`
                                         : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 border border-transparent'
-                                    }`}
-                            >
-                                {s.icon}
-                                <span>{s.label}</span>
-                            </motion.button>
-                        );
-                    })}
-                </nav>
+                                        }`}
+                                >
+                                    {s.icon}
+                                    <span>{s.label}</span>
+                                </motion.button>
+                            );
+                        })}
+                    </nav>
 
-                {/* Content */}
-                <div className="flex-1 flex flex-col">
-                    <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-                        <h2 className="text-lg font-semibold text-zinc-100">
-                            {SECTIONS.find((s) => s.id === activeSection)?.label}
-                        </h2>
-                        <button
-                            onClick={onClose}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 transition-colors cursor-pointer"
-                            aria-label="Close"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M18 6 6 18M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </header>
-                    <div className="flex-1 overflow-y-auto p-6">
-                        {activeSection === 'general' && (
-                            <GeneralSection
-                                musicFolder={musicFolder}
-                                onChangeFolder={onChangeFolder}
-                                autoWallpaper={autoWallpaper}
-                                setAutoWallpaper={setAutoWallpaper}
-                                resetOnClose={resetOnClose}
-                                setResetOnClose={setResetOnClose}
-                                defaultWallpaper={defaultWallpaper}
-                                onPickWallpaper={onPickWallpaper}
-                                onClearWallpaper={onClearWallpaper}
-                                accentColor={accentColor}
-                                onCheckUpdate={onCheckUpdate}
-                                updateStatus={updateStatus}
-                                updateChecking={updateChecking}
-                            />
-                        )}
-                        {activeSection === 'sort' && (
-                            <SortSection
-                                folderSort={folderSort}
-                                setFolderSort={setFolderSort}
-                                fileSort={fileSort}
-                                setFileSort={setFileSort}
-                                sortDir={sortDir}
-                                setSortDir={setSortDir}
-                                formats={formats}
-                                setFormats={setFormats}
-                            />
-                        )}
-                        {activeSection === 'style' && (
-                            <StyleSection
-                                theme={theme}
-                                setTheme={setTheme}
-                                accentColor={accentColor}
-                                setAccentColor={setAccentColor}
-                                customAccentHex={customAccentHex}
-                                setCustomAccentHex={setCustomAccentHex}
-                                onResetSidebarWidth={onResetSidebarWidth}
-                            />
-                        )}
-                        {activeSection === 'about' && <AboutSection />}
-                        {activeSection === 'debug' && <DebugSection logs={logs} />}
+                    {/* Content */}
+                    <div className="flex-1 flex flex-col">
+                        <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+                            <h2 className="text-lg font-semibold text-zinc-100">
+                                {SECTIONS.find((s) => s.id === activeSection)?.label}
+                            </h2>
+                            <button
+                                onClick={onClose}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                                aria-label="Close"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </header>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {activeSection === 'general' && (
+                                <GeneralSection
+                                    musicFolder={musicFolder}
+                                    onChangeFolder={onChangeFolder}
+                                    autoWallpaper={autoWallpaper}
+                                    setAutoWallpaper={setAutoWallpaper}
+                                    resetOnClose={resetOnClose}
+                                    setResetOnClose={setResetOnClose}
+                                    defaultWallpaper={defaultWallpaper}
+                                    onPickWallpaper={onPickWallpaper}
+                                    onClearWallpaper={onClearWallpaper}
+                                    accentColor={accentColor}
+                                    onCheckUpdate={onCheckUpdate}
+                                    updateStatus={updateStatus}
+                                    updateChecking={updateChecking}
+                                />
+                            )}
+                            {activeSection === 'sort' && (
+                                <SortSection
+                                    folderSort={folderSort}
+                                    setFolderSort={setFolderSort}
+                                    fileSort={fileSort}
+                                    setFileSort={setFileSort}
+                                    sortDir={sortDir}
+                                    setSortDir={setSortDir}
+                                    formats={formats}
+                                    setFormats={setFormats}
+                                />
+                            )}
+                            {activeSection === 'style' && (
+                                <StyleSection
+                                    theme={theme}
+                                    setTheme={setTheme}
+                                    accentColor={accentColor}
+                                    setAccentColor={setAccentColor}
+                                    customAccentHex={customAccentHex}
+                                    setCustomAccentHex={setCustomAccentHex}
+                                    onResetSidebarWidth={onResetSidebarWidth}
+                                />
+                            )}
+                            {activeSection === 'about' && <AboutSection />}
+                            {activeSection === 'debug' && <DebugSection logs={logs} />}
+                        </div>
                     </div>
-                </div>
                 </motion.div>
             </motion.div>
         </AnimatePresence>
@@ -375,8 +375,8 @@ function GeneralSection({
                         onClick={onCheckUpdate}
                         disabled={updateChecking}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 border transition-colors cursor-pointer ${updateChecking
-                                ? 'bg-zinc-800/40 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
-                                : 'bg-zinc-800/60 hover:bg-zinc-700/70 border-zinc-700/50'
+                            ? 'bg-zinc-800/40 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
+                            : 'bg-zinc-800/60 hover:bg-zinc-700/70 border-zinc-700/50'
                             }`}
                     >
                         {updateChecking ? 'Memeriksa...' : 'Check for Update'}
@@ -559,8 +559,8 @@ function StyleSection({
                                 key={s.id}
                                 onClick={() => setAccentColor(s.id)}
                                 className={`w-6 h-6 rounded-full ${s.bg} cursor-pointer transition-all ${active
-                                        ? 'border-2 border-zinc-100 scale-110'
-                                        : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
+                                    ? 'border-2 border-zinc-100 scale-110'
+                                    : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
                                     }`}
                                 aria-label={s.id}
                             />
@@ -569,8 +569,8 @@ function StyleSection({
                     <button
                         onClick={() => setAccentColor('custom')}
                         className={`w-6 h-6 rounded-full cursor-pointer transition-all flex items-center justify-center ${accentColor === 'custom'
-                                ? 'border-2 border-zinc-100 scale-110'
-                                : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
+                            ? 'border-2 border-zinc-100 scale-110'
+                            : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
                             }`}
                         style={{ background: customAccentHex }}
                         aria-label="custom"
@@ -597,7 +597,7 @@ function StyleSection({
             </SettingRow>
             <SettingRow
                 title="Lebar Sidebar"
-                        description="Reset lebar sidebar kiri dan panel detail ke ukuran default"
+                description="Reset lebar sidebar kiri dan panel detail ke ukuran default"
             >
                 <button
                     onClick={onResetSidebarWidth}
@@ -623,12 +623,12 @@ function AboutSection() {
                     <span>by <span className="text-zinc-400">Eszuri</span></span>
                     <span className="text-zinc-700">|</span>
                     <a
-                        href="https://example.com"
+                        href="https://github.com/Eszuri/symvonia"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
                     >
-                        example.com
+                        github.com/Eszuri/symvonia
                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                             <polyline points="15 3 21 3 21 9" />
