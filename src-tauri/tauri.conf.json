@@ -51,7 +51,7 @@
     },
     "plugins": {
         "updater": {
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcyNEUxNzRCMTRFQ0E0QjEKUldTeHBPd1VTeGRPY3JaQVUwR3M2S0NxeUdnbkZuS3dtWStZSWhhWmZlVVRqdnJvVlRhUDZ5QmEK",
+            "pubkey": "RWTxIdklQOQ04YsKO2/AmQKuxPIt6PTHMFjd+S/CY3DGTQXhPxjzO5Q0",
             "endpoints": [
                 "https://github.com/Eszuri/symvonia/releases/latest/download/latest.json"
             ]

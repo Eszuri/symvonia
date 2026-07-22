@@ -13,12 +13,14 @@ export interface FileEntry {
     size: number;
     ctime: number;
     display_name: string;
+    sort_key: string;
 }
 
 interface FolderExplorerProps {
     files: FileEntry[];
     loading: boolean;
     selectedSong: FileEntry | null;
+    playingAncestorPrefix: string | null;
     displayPath: string;
     debugError: string;
     goUp: () => void;
@@ -30,10 +32,20 @@ interface FolderExplorerProps {
     accentColor: string;
 }
 
+function isAncestorOf(folderPath: string, targetPath: string): boolean {
+    const f = folderPath.toLowerCase();
+    const t = targetPath.toLowerCase();
+    if (f === t) return false;
+    // target is inside folder (or its sub-tree) if it starts with `folder\` or `folder/`
+    return t.startsWith(f + '\\') || t.startsWith(f + '/');
+}
+
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 500;
 const DEFAULT_WIDTH = 288;
 const STORAGE_KEY = 'music-app-sidebar-width';
+const ROW_HEIGHT = 36;
+const VIRTUAL_BUFFER = 5;
 
 function loadSavedWidth(): number {
     if (typeof window === 'undefined') return DEFAULT_WIDTH;
@@ -48,6 +60,7 @@ export default function FolderExplorer({
     files,
     loading,
     selectedSong,
+    playingAncestorPrefix,
     displayPath,
     debugError,
     goUp,
@@ -63,6 +76,29 @@ export default function FolderExplorer({
     const isDraggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(DEFAULT_WIDTH);
+
+    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const [scrollTop, setScrollTop] = useState(0);
+    const [viewportH, setViewportH] = useState(0);
+    const lastFilesRef = useRef<FileEntry[]>(files);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        setViewportH(el.clientHeight);
+        const ro = new ResizeObserver(() => setViewportH(el.clientHeight));
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    useEffect(() => {
+        // Reset scroll when the file list reference itself changes (folder/sort swap).
+        if (lastFilesRef.current !== files) {
+            lastFilesRef.current = files;
+            if (scrollRef.current) scrollRef.current.scrollTop = 0;
+            setScrollTop(0);
+        }
+    });
 
     useEffect(() => {
         setWidth(loadSavedWidth());
@@ -148,7 +184,11 @@ export default function FolderExplorer({
                     </svg>
                 </motion.button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div
+                ref={scrollRef}
+                onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+                className="flex-1 overflow-y-auto"
+            >
                 <AnimatePresence mode="wait" initial={false}>
                     {loading ? (
                         <motion.div
@@ -173,42 +213,19 @@ export default function FolderExplorer({
                             Tidak ada file
                         </motion.div>
                     ) : (
-                        <motion.div
-                            key="list"
-                            initial="hidden"
-                            animate="show"
-                            exit={{ opacity: 0 }}
-                            variants={{
-                                hidden: {},
-                                show: { transition: { staggerChildren: 0.025 } },
-                            }}
-                        >
-                            {files.map((file) => {
-                                const isSelected = selectedSong?.path === file.path;
-                                return (
-                                    <motion.button
-                                        key={file.path}
-                                        variants={{
-                                            hidden: { opacity: 0, x: -8 },
-                                            show: { opacity: 1, x: 0 },
-                                        }}
-                                        transition={{ duration: 0.2 }}
-                                        onClick={() => file.is_dir ? setCurrentPath(file.path) : playSong(file)}
-                                        whileHover={{ x: 2 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer ${isSelected
-                                            ? `${accent.bg10} ${accent.text400} border-l-2 ${accent.border500}`
-                                            : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent'
-                                            }`}
-                                    >
-                                        <span className="shrink-0 text-[10px]">
-                                            {file.is_dir ? '📁' : isSelected ? '▶' : '🎵'}
-                                        </span>
-                                        <span className="truncate">{file.display_name}</span>
-                                    </motion.button>
-                                );
-                            })}
-                        </motion.div>
+                        <VirtualList
+                            files={files}
+                            scrollTop={scrollTop}
+                            viewportH={viewportH}
+                            selectedPath={selectedSong?.path ?? null}
+                            playingAncestorPrefix={playingAncestorPrefix}
+                            onPick={playSong}
+                            onEnterDir={setCurrentPath}
+                            accentBg10={accent.bg10}
+                            accentText400={accent.text400}
+                            accentBorder500={accent.border500}
+                            accentBg30={accent.bg30}
+                        />
                     )}
                 </AnimatePresence>
                 <AnimatePresence>
@@ -236,6 +253,90 @@ export default function FolderExplorer({
                 className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize transition-colors"
             />
         </aside>
+    );
+}
+
+function VirtualList({
+    files,
+    scrollTop,
+    viewportH,
+    selectedPath,
+    playingAncestorPrefix,
+    onPick,
+    onEnterDir,
+    accentBg10,
+    accentText400,
+    accentBorder500,
+    accentBg30,
+}: {
+    files: FileEntry[];
+    scrollTop: number;
+    viewportH: number;
+    selectedPath: string | null;
+    playingAncestorPrefix: string | null;
+    onPick: (file: FileEntry) => void;
+    onEnterDir: (path: string) => void;
+    accentBg10: string;
+    accentText400: string;
+    accentBorder500: string;
+    accentBg30: string;
+}) {
+    const totalH = files.length * ROW_HEIGHT;
+    const visibleCount = viewportH > 0 ? Math.ceil(viewportH / ROW_HEIGHT) : 20;
+    let startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - VIRTUAL_BUFFER);
+    const endIdx = Math.min(files.length, startIdx + visibleCount + VIRTUAL_BUFFER * 2);
+    if (endIdx - startIdx < visibleCount + VIRTUAL_BUFFER * 2) {
+        startIdx = Math.max(0, endIdx - (visibleCount + VIRTUAL_BUFFER * 2));
+    }
+    const topPad = startIdx * ROW_HEIGHT;
+    const bottomPad = totalH - endIdx * ROW_HEIGHT;
+    const slice = files.slice(startIdx, endIdx);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.15 }}
+            className="relative"
+            style={{ height: totalH }}
+        >
+            <div style={{ height: topPad }} />
+            {slice.map((file) => {
+                const isSelected = selectedPath === file.path;
+                // Folder that contains the currently playing song in its sub-tree.
+                // Stays highlighted even after the user navigates out of it.
+                const isPlayingAncestor =
+                    file.is_dir &&
+                    !isSelected &&
+                    playingAncestorPrefix != null &&
+                    isAncestorOf(file.path, playingAncestorPrefix);
+                let rowClass: string;
+                let titleAttr: string | undefined;
+                if (isSelected) {
+                    rowClass = `${accentBg10} ${accentText400} border-l-2 ${accentBorder500}`;
+                } else if (isPlayingAncestor) {
+                    rowClass = `${accentBg30} ${accentText400} border-l-2 ${accentBorder500}`;
+                    titleAttr = 'Folder berisi lagu yang sedang diputar';
+                } else {
+                    rowClass = 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent';
+                }
+                return (
+                    <button
+                        key={file.path}
+                        onClick={() => file.is_dir ? onEnterDir(file.path) : onPick(file)}
+                        title={titleAttr}
+                        className={`w-full flex items-center gap-2.5 px-3 text-sm text-left cursor-pointer transition-colors duration-100 ${rowClass}`}
+                        style={{ height: ROW_HEIGHT }}
+                    >
+                        <span className="shrink-0 text-[10px]">
+                            {file.is_dir ? (isPlayingAncestor ? '▶' : '📁') : isSelected ? '▶' : '🎵'}
+                        </span>
+                        <span className="truncate">{file.display_name}</span>
+                    </button>
+                );
+            })}
+            <div style={{ height: Math.max(0, bottomPad) }} />
+        </motion.div>
     );
 }
 

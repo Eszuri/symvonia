@@ -665,6 +665,8 @@ export default function Home() {
     const [streamingOpen, setStreamingOpen] = useState(false);
     const [updateChecking, setUpdateChecking] = useState(false);
     const [updateStatus, setUpdateStatus] = useState('');
+    const [updateDownloaded, setUpdateDownloaded] = useState(0);
+    const [updateTotal, setUpdateTotal] = useState(0);
 
     const doPickFolder = useCallback(async () => {
         try {
@@ -724,20 +726,22 @@ export default function Home() {
         }
         setUpdateChecking(true);
         setUpdateStatus('');
+        setUpdateDownloaded(0);
+        setUpdateTotal(0);
         try {
             const { check } = await import('@tauri-apps/plugin-updater');
             const update = await check();
             if (update) {
                 setUpdateStatus(`v${update.version} tersedia. Mendownload...`);
-                let downloaded = 0;
-                let total = 0;
                 await update.download((ev) => {
                     if (ev.event === 'Started') {
-                        total = ev.data.contentLength ?? 0;
+                        setUpdateTotal(ev.data.contentLength ?? 0);
+                        setUpdateDownloaded(0);
                     } else if (ev.event === 'Progress') {
-                        downloaded += ev.data.chunkLength;
+                        setUpdateDownloaded((d) => d + ev.data.chunkLength);
                     }
                 });
+                setUpdateDownloaded((d) => (updateTotal > 0 ? updateTotal : d));
                 setUpdateStatus(`v${update.version} siap. Menginstall...`);
                 await update.install();
             } else {
@@ -749,8 +753,10 @@ export default function Home() {
             addLog('error', `Update check failed: ${msg}`);
         } finally {
             setUpdateChecking(false);
+            setUpdateDownloaded(0);
+            setUpdateTotal(0);
         }
-    }, [addLog]);
+    }, [addLog, updateTotal]);
 
     const confirmFolderChange = useCallback(() => {
         setPendingFolderChange(false);
@@ -898,6 +904,7 @@ export default function Home() {
                                         files={files}
                                         loading={loadingFiles}
                                         selectedSong={selectedSong}
+                                        playingAncestorPrefix={selectedSong?.path ?? null}
                                         displayPath={displayPath}
                                         debugError={debugError}
                                         goUp={goUp}
@@ -1014,6 +1021,8 @@ export default function Home() {
                 onCheckUpdate={handleCheckUpdate}
                 updateStatus={updateStatus}
                 updateChecking={updateChecking}
+                updateDownloaded={updateDownloaded}
+                updateTotal={updateTotal}
             />
             <StreamingModal
                 open={streamingOpen}

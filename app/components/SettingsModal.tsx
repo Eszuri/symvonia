@@ -107,6 +107,8 @@ interface SettingsModalProps {
     onCheckUpdate: () => void;
     updateStatus: string;
     updateChecking: boolean;
+    updateDownloaded: number;
+    updateTotal: number;
 }
 
 export default function SettingsModal({
@@ -142,6 +144,8 @@ export default function SettingsModal({
     onCheckUpdate,
     updateStatus,
     updateChecking,
+    updateDownloaded,
+    updateTotal,
 }: SettingsModalProps) {
     const [activeSection, setActiveSection] = useState<SectionId>('general');
 
@@ -235,6 +239,8 @@ export default function SettingsModal({
                                     onCheckUpdate={onCheckUpdate}
                                     updateStatus={updateStatus}
                                     updateChecking={updateChecking}
+                                    updateDownloaded={updateDownloaded}
+                                    updateTotal={updateTotal}
                                 />
                             )}
                             {activeSection === 'sort' && (
@@ -286,6 +292,8 @@ function GeneralSection({
     onCheckUpdate,
     updateStatus,
     updateChecking,
+    updateDownloaded,
+    updateTotal,
 }: {
     musicFolder: string | null;
     onChangeFolder: () => void;
@@ -300,6 +308,8 @@ function GeneralSection({
     onCheckUpdate: () => void;
     updateStatus: string;
     updateChecking: boolean;
+    updateDownloaded: number;
+    updateTotal: number;
 }) {
     const accent = getAccent(accentColor);
     return (
@@ -373,22 +383,72 @@ function GeneralSection({
                 title="Update"
                 description="Periksa versi terbaru Symvonia"
             >
-                <div className="flex items-center gap-3">
-                    {updateStatus && (
-                        <span className="text-xs text-zinc-400">{updateStatus}</span>
-                    )}
-                    <button
-                        onClick={onCheckUpdate}
-                        disabled={updateChecking}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 border transition-colors cursor-pointer ${updateChecking
-                            ? 'bg-zinc-800/40 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
-                            : 'bg-zinc-800/60 hover:bg-zinc-700/70 border-zinc-700/50'
-                            }`}
-                    >
-                        {updateChecking ? 'Memeriksa...' : 'Check for Update'}
-                    </button>
-                </div>
+                <UpdateControl
+                    accent={accent}
+                    status={updateStatus}
+                    checking={updateChecking}
+                    downloaded={updateDownloaded}
+                    total={updateTotal}
+                    onCheck={onCheckUpdate}
+                />
             </SettingRow>
+        </div>
+    );
+}
+
+function UpdateControl({
+    accent,
+    status,
+    checking,
+    downloaded,
+    total,
+    onCheck,
+}: {
+    accent: Record<string, string>;
+    status: string;
+    checking: boolean;
+    downloaded: number;
+    total: number;
+    onCheck: () => void;
+}) {
+    const isDownloading = total > 0;
+    const pct = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
+    const fmtMB = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
+    return (
+        <div className="flex flex-col items-end gap-2 min-w-[260px]">
+            {isDownloading && (
+                <div className="w-full">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-1 font-mono">
+                        <span>{fmtMB(downloaded)} / {fmtMB(total)}</span>
+                        <span>{pct}%</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                        <motion.div
+                            className={`h-full ${accent.bg500} rounded-full`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.15, ease: 'linear' }}
+                        />
+                    </div>
+                </div>
+            )}
+            <div className="flex items-center gap-3">
+                {status && (
+                    <span className="text-xs text-zinc-400 max-w-[160px] truncate" title={status}>
+                        {status}
+                    </span>
+                )}
+                <button
+                    onClick={onCheck}
+                    disabled={checking}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 border transition-colors cursor-pointer ${checking
+                        ? 'bg-zinc-800/40 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
+                        : 'bg-zinc-800/60 hover:bg-zinc-700/70 border-zinc-700/50'
+                        }`}
+                >
+                    {checking ? 'Memeriksa...' : 'Check for Update'}
+                </button>
+            </div>
         </div>
     );
 }

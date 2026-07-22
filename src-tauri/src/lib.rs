@@ -37,6 +37,7 @@ struct FileEntry {
     size: u64,
     ctime: u64,
     display_name: String,
+    sort_key: String,
 }
 
 static RESET_ON_CLOSE: AtomicBool = AtomicBool::new(true);
@@ -120,12 +121,7 @@ fn file_display_name(path: &Path, filename: &str, name_source: &str) -> String {
         .unwrap_or_else(|| filename.to_string())
 }
 
-fn file_sort_key(path: &Path, filename: &str, name_source: &str) -> String {
-    file_display_name(path, filename, name_source).to_lowercase()
-}
-
-#[tauri::command]
-fn list_files(
+fn list_files_inner(
     path: String,
     folder_sort: String,
     file_sort: String,
@@ -171,10 +167,14 @@ fn list_files(
                 .as_secs();
             let size = metadata.len();
 
-            let display_name = if is_dir {
-                name.clone()
+            let (display_name, sort_key) = if is_dir {
+                let dn = name.clone();
+                let sk = name.to_lowercase();
+                (dn, sk)
             } else {
-                file_display_name(&entry.path(), &name, &name_source)
+                let dn = file_display_name(&entry.path(), &name, &name_source);
+                let sk = dn.to_lowercase();
+                (dn, sk)
             };
 
             files.push(FileEntry {
@@ -186,31 +186,49 @@ fn list_files(
                 size,
                 ctime,
                 display_name,
+                sort_key,
             });
         }
     }
 
+    let desc = sort_dir == "desc";
+    let fsort = file_sort;
+    let fosort = folder_sort;
     files.sort_by(|a, b| {
         if a.is_dir != b.is_dir {
             b.is_dir.cmp(&a.is_dir)
         } else {
-            let key = if a.is_dir { &folder_sort } else { &file_sort };
+            let key = if a.is_dir { &fosort } else { &fsort };
             let cmp = match key.as_str() {
-                "name" => {
-                    let na = file_sort_key(Path::new(&a.path), &a.name, &name_source);
-                    let nb = file_sort_key(Path::new(&b.path), &b.name, &name_source);
-                    na.cmp(&nb)
-                }
+                "name" => a.sort_key.cmp(&b.sort_key),
                 "size" => a.size.cmp(&b.size),
                 "ext" => a.ext.cmp(&b.ext),
                 "ctime" => a.ctime.cmp(&b.ctime),
                 _ => a.mtime.cmp(&b.mtime),
             };
-            if sort_dir == "desc" { cmp.reverse() } else { cmp }
+            if desc { cmp.reverse() } else { cmp }
         }
     });
 
     Ok(files)
+}
+
+#[tauri::command]
+async fn list_files(
+    path: String,
+    folder_sort: String,
+    file_sort: String,
+    sort_dir: String,
+    name_source: String,
+    formats: Vec<String>,
+) -> Result<Vec<FileEntry>, String> {
+    // Move heavy work (filesystem + metadata reads + sort) off the async runtime
+    // onto the blocking thread pool so the UI thread doesn't stall.
+    tauri::async_runtime::spawn_blocking(move || {
+        list_files_inner(path, folder_sort, file_sort, sort_dir, name_source, formats)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -462,6 +480,15 @@ fn is_media_url(url: &str) -> bool {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // When a second instance is launched, focus the existing main window
+            // instead of starting a duplicate process.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .invoke_handler(tauri::generate_handler![
             list_files,
             get_metadata,
