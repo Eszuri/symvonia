@@ -726,7 +726,7 @@ function AboutSection() {
                     <img src="/icon.png" alt="Symvonia" className="w-12 h-12 object-contain" />
                 </div>
                 <h3 className="text-lg font-semibold text-zinc-100">Symvonia</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">Version 0.3.0</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Version 0.5.0</p>
                 <div className="flex items-center justify-center gap-3 mt-2 text-xs text-zinc-500">
                     <span>by <span className="text-zinc-400">Eszuri</span></span>
                     <span className="text-zinc-700">|</span>
