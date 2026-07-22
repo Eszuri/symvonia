@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { getAccent } from '../lib/colors';
+import React, {useEffect, useRef, useState} from 'react';
+import {AnimatePresence, motion} from 'framer-motion';
+import {getAccent} from '../lib/colors';
 
 export interface LogEntry {
     id: number;
@@ -92,6 +92,8 @@ interface SettingsModalProps {
     setFileSort: (v: string) => void;
     sortDir: string;
     setSortDir: (v: string) => void;
+    nameSource: string;
+    setNameSource: (v: string) => void;
     formats: string[];
     setFormats: (v: string[]) => void;
     theme: string;
@@ -125,6 +127,8 @@ export default function SettingsModal({
     setFileSort,
     sortDir,
     setSortDir,
+    nameSource,
+    setNameSource,
     formats,
     setFormats,
     theme,
@@ -156,19 +160,19 @@ export default function SettingsModal({
         <AnimatePresence>
             <motion.div
                 key="backdrop"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
+                initial={{opacity: 0}}
+                animate={{opacity: 1}}
+                exit={{opacity: 0}}
+                transition={{duration: 0.18}}
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
                 onClick={onClose}
             >
                 <motion.div
                     key="modal"
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    initial={{opacity: 0, scale: 0.95, y: 10}}
+                    animate={{opacity: 1, scale: 1, y: 0}}
+                    exit={{opacity: 0, scale: 0.95, y: 10}}
+                    transition={{duration: 0.2, ease: [0.16, 1, 0.3, 1]}}
                     className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/60 w-[min(900px,90vw)] h-[min(560px,80vh)] flex overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -184,9 +188,9 @@ export default function SettingsModal({
                                 <motion.button
                                     key={s.id}
                                     onClick={() => setActiveSection(s.id)}
-                                    whileHover={{ x: 2 }}
-                                    whileTap={{ scale: 0.97 }}
-                                    transition={{ duration: 0.15 }}
+                                    whileHover={{x: 2}}
+                                    whileTap={{scale: 0.97}}
+                                    transition={{duration: 0.15}}
                                     className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left cursor-pointer ${isActive
                                         ? `${a.bg15} ${a.text400} border ${a.border500_20}`
                                         : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 border border-transparent'
@@ -241,6 +245,8 @@ export default function SettingsModal({
                                     setFileSort={setFileSort}
                                     sortDir={sortDir}
                                     setSortDir={setSortDir}
+                                    nameSource={nameSource}
+                                    setNameSource={setNameSource}
                                     formats={formats}
                                     setFormats={setFormats}
                                 />
@@ -394,6 +400,8 @@ function SortSection({
     setFileSort,
     sortDir,
     setSortDir,
+    nameSource,
+    setNameSource,
     formats,
     setFormats,
 }: {
@@ -403,6 +411,8 @@ function SortSection({
     setFileSort: (v: string) => void;
     sortDir: string;
     setSortDir: (v: string) => void;
+    nameSource: string;
+    setNameSource: (v: string) => void;
     formats: string[];
     setFormats: (v: string[]) => void;
 }) {
@@ -446,6 +456,44 @@ function SortSection({
                     value={fileSort}
                     onChange={setFileSort}
                 />
+            </SettingRow>
+            <SettingRow
+                title="Nama-Nama daftar lagu yg ditampilkan"
+                description="list lagu yg ditampilkan berdasarkan nama file atau title (metadata)"
+                className="pb-20"
+            >
+
+                <SelectStub
+                    options={[['filename', 'Nama File'], ['title', 'Title (Metadata)']]}
+                    value={nameSource}
+                    onChange={setNameSource}
+                />
+                <div className='absolute -bottom-16 inset-x-0 w-full h-full'>
+                    <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed -mt-3 ${nameSource === 'title' ? 'bg-amber-900/20 text-amber-300/90 border border-amber-700/30' : 'bg-zinc-800/30 text-zinc-500 border border-zinc-700/30'}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+                            {nameSource === 'title' ? (
+                                <>
+                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </>
+                            ) : (
+                                <>
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="16" x2="12" y2="12" />
+                                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                                </>
+                            )}
+                        </svg>
+                        <span>
+                            {nameSource === 'title'
+                                ? 'Menggunakan Title (Metadata) akan membaca tag dari setiap file audio, sehingga waktu memuat daftar lagu bisa lebih lama terutama jika folder berisi banyak file. bahkan bisa menyebabkan aplikasi crash'
+                                : 'Jika ingin menampilkan judul dari metadata (bukan nama file), waktu memuat daftar lagu akan sedikit lebih lama.'}
+                        </span>
+                    </div>
+
+
+                </div>
             </SettingRow>
             <SettingRow
                 title="Arah Urutan"
@@ -498,7 +546,7 @@ function SortSection({
                     </div>
                 </div>
             </SettingRow>
-        </div>
+        </div >
     );
 }
 
@@ -519,21 +567,21 @@ function StyleSection({
     setCustomAccentHex: (v: string) => void;
     onResetSidebarWidth: () => void;
 }) {
-    const swatches: { id: string; bg: string }[] = [
-        { id: 'green', bg: 'bg-green-500' },
-        { id: 'emerald', bg: 'bg-emerald-500' },
-        { id: 'teal', bg: 'bg-teal-500' },
-        { id: 'cyan', bg: 'bg-cyan-500' },
-        { id: 'blue', bg: 'bg-blue-500' },
-        { id: 'indigo', bg: 'bg-indigo-500' },
-        { id: 'purple', bg: 'bg-purple-500' },
-        { id: 'pink', bg: 'bg-pink-500' },
-        { id: 'rose', bg: 'bg-rose-500' },
-        { id: 'red', bg: 'bg-red-500' },
-        { id: 'orange', bg: 'bg-orange-500' },
-        { id: 'amber', bg: 'bg-amber-500' },
-        { id: 'yellow', bg: 'bg-yellow-500' },
-        { id: 'lime', bg: 'bg-lime-500' },
+    const swatches: {id: string; bg: string}[] = [
+        {id: 'green', bg: 'bg-green-500'},
+        {id: 'emerald', bg: 'bg-emerald-500'},
+        {id: 'teal', bg: 'bg-teal-500'},
+        {id: 'cyan', bg: 'bg-cyan-500'},
+        {id: 'blue', bg: 'bg-blue-500'},
+        {id: 'indigo', bg: 'bg-indigo-500'},
+        {id: 'purple', bg: 'bg-purple-500'},
+        {id: 'pink', bg: 'bg-pink-500'},
+        {id: 'rose', bg: 'bg-rose-500'},
+        {id: 'red', bg: 'bg-red-500'},
+        {id: 'orange', bg: 'bg-orange-500'},
+        {id: 'amber', bg: 'bg-amber-500'},
+        {id: 'yellow', bg: 'bg-yellow-500'},
+        {id: 'lime', bg: 'bg-lime-500'},
     ];
     return (
         <div className="space-y-6">
@@ -572,7 +620,7 @@ function StyleSection({
                             ? 'border-2 border-zinc-100 scale-110'
                             : 'border-2 border-zinc-700 opacity-50 hover:opacity-80'
                             }`}
-                        style={{ background: customAccentHex }}
+                        style={{background: customAccentHex}}
                         aria-label="custom"
                         title="Custom"
                     >
@@ -668,7 +716,7 @@ function AboutSection() {
     );
 }
 
-function TechBadge({ label, version }: { label: string; version: string }) {
+function TechBadge({label, version}: {label: string; version: string}) {
     return (
         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800/70 border border-zinc-700/40 text-[11px] text-zinc-300">
             {label}
@@ -677,10 +725,10 @@ function TechBadge({ label, version }: { label: string; version: string }) {
     );
 }
 
-function DebugSection({ logs }: { logs: LogEntry[] }) {
+function DebugSection({logs}: {logs: LogEntry[]}) {
     const bottomRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        bottomRef.current?.scrollIntoView({behavior: 'smooth'});
     }, [logs.length]);
     return (
         <div className="h-full flex flex-col">
@@ -709,13 +757,15 @@ function SettingRow({
     title,
     description,
     children,
+    className = ''
 }: {
     title: string;
     description: string;
     children: React.ReactNode;
+    className?: string
 }) {
     return (
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-zinc-800/60 last:border-0">
+        <div className={`relative flex items-start justify-between gap-4 pb-4 border-b border-zinc-800/60 last:border-0 ${className}`}>
             <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-medium text-zinc-100">{title}</h4>
                 <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
@@ -725,7 +775,7 @@ function SettingRow({
     );
 }
 
-function ToggleStub({ checked = false, onChange, accent, disabled }: { checked?: boolean; onChange?: (v: boolean) => void; accent: Record<string, string>; disabled?: boolean }) {
+function ToggleStub({checked = false, onChange, accent, disabled}: {checked?: boolean; onChange?: (v: boolean) => void; accent: Record<string, string>; disabled?: boolean}) {
     return (
         <button
             type="button"

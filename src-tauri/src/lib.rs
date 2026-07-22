@@ -36,6 +36,7 @@ struct FileEntry {
     mtime: u64,
     size: u64,
     ctime: u64,
+    display_name: String,
 }
 
 static RESET_ON_CLOSE: AtomicBool = AtomicBool::new(true);
@@ -99,12 +100,37 @@ fn get_default_wallpaper_path() -> Result<Option<String>, String> {
     Ok(guard.clone())
 }
 
+fn file_display_name(path: &Path, filename: &str, name_source: &str) -> String {
+    if name_source == "title" {
+        if let Ok(tagged_file) = read_from_path(path) {
+            if let Some(tag) = tagged_file.primary_tag() {
+                if let Some(title) = tag.title() {
+                    let t = title.trim();
+                    if !t.is_empty() {
+                        return t.to_string();
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: filename without extension
+    Path::new(filename)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| filename.to_string())
+}
+
+fn file_sort_key(path: &Path, filename: &str, name_source: &str) -> String {
+    file_display_name(path, filename, name_source).to_lowercase()
+}
+
 #[tauri::command]
 fn list_files(
     path: String,
     folder_sort: String,
     file_sort: String,
     sort_dir: String,
+    name_source: String,
     formats: Vec<String>,
 ) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| format!("Gagal membaca folder: {}", e))?;
@@ -145,6 +171,12 @@ fn list_files(
                 .as_secs();
             let size = metadata.len();
 
+            let display_name = if is_dir {
+                name.clone()
+            } else {
+                file_display_name(&entry.path(), &name, &name_source)
+            };
+
             files.push(FileEntry {
                 name,
                 path: entry.path().to_string_lossy().to_string(),
@@ -153,6 +185,7 @@ fn list_files(
                 mtime,
                 size,
                 ctime,
+                display_name,
             });
         }
     }
@@ -163,7 +196,11 @@ fn list_files(
         } else {
             let key = if a.is_dir { &folder_sort } else { &file_sort };
             let cmp = match key.as_str() {
-                "name" => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                "name" => {
+                    let na = file_sort_key(Path::new(&a.path), &a.name, &name_source);
+                    let nb = file_sort_key(Path::new(&b.path), &b.name, &name_source);
+                    na.cmp(&nb)
+                }
                 "size" => a.size.cmp(&b.size),
                 "ext" => a.ext.cmp(&b.ext),
                 "ctime" => a.ctime.cmp(&b.ctime),

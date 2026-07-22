@@ -12,10 +12,12 @@ export interface FileEntry {
     mtime: number;
     size: number;
     ctime: number;
+    display_name: string;
 }
 
 interface FolderExplorerProps {
     files: FileEntry[];
+    loading: boolean;
     selectedSong: FileEntry | null;
     displayPath: string;
     debugError: string;
@@ -44,6 +46,7 @@ function loadSavedWidth(): number {
 
 export default function FolderExplorer({
     files,
+    loading,
     selectedSong,
     displayPath,
     debugError,
@@ -146,44 +149,68 @@ export default function FolderExplorer({
                 </motion.button>
             </div>
             <div className="flex-1 overflow-y-auto">
-                {files.length === 0 ? (
-                    <div className="p-4 text-zinc-600 text-center">Tidak ada file</div>
-                ) : (
-                    <motion.div
-                        initial="hidden"
-                        animate="show"
-                        variants={{
-                            hidden: {},
-                            show: { transition: { staggerChildren: 0.025 } },
-                        }}
-                    >
-                        {files.map((file) => {
-                            const isSelected = selectedSong?.path === file.path;
-                            return (
-                                <motion.button
-                                    key={file.path}
-                                    variants={{
-                                        hidden: { opacity: 0, x: -8 },
-                                        show: { opacity: 1, x: 0 },
-                                    }}
-                                    transition={{ duration: 0.2 }}
-                                    onClick={() => file.is_dir ? setCurrentPath(file.path) : playSong(file)}
-                                    whileHover={{ x: 2 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer ${isSelected
-                                        ? `${accent.bg10} ${accent.text400} border-l-2 ${accent.border500}`
-                                        : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent'
-                                        }`}
-                                >
-                                    <span className="shrink-0 text-[10px]">
-                                        {file.is_dir ? '📁' : isSelected ? '▶' : '🎵'}
-                                    </span>
-                                    <span className="truncate">{file.name}</span>
-                                </motion.button>
-                            );
-                        })}
-                    </motion.div>
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                    {loading ? (
+                        <motion.div
+                            key="skeleton"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18 }}
+                            className="py-1"
+                        >
+                            <SkeletonList accentHex={accent.hex400} />
+                        </motion.div>
+                    ) : files.length === 0 ? (
+                        <motion.div
+                            key="empty"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18 }}
+                            className="p-4 text-zinc-600 text-center"
+                        >
+                            Tidak ada file
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="list"
+                            initial="hidden"
+                            animate="show"
+                            exit={{ opacity: 0 }}
+                            variants={{
+                                hidden: {},
+                                show: { transition: { staggerChildren: 0.025 } },
+                            }}
+                        >
+                            {files.map((file) => {
+                                const isSelected = selectedSong?.path === file.path;
+                                return (
+                                    <motion.button
+                                        key={file.path}
+                                        variants={{
+                                            hidden: { opacity: 0, x: -8 },
+                                            show: { opacity: 1, x: 0 },
+                                        }}
+                                        transition={{ duration: 0.2 }}
+                                        onClick={() => file.is_dir ? setCurrentPath(file.path) : playSong(file)}
+                                        whileHover={{ x: 2 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer ${isSelected
+                                            ? `${accent.bg10} ${accent.text400} border-l-2 ${accent.border500}`
+                                            : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200 border-l-2 border-transparent'
+                                            }`}
+                                    >
+                                        <span className="shrink-0 text-[10px]">
+                                            {file.is_dir ? '📁' : isSelected ? '▶' : '🎵'}
+                                        </span>
+                                        <span className="truncate">{file.display_name}</span>
+                                    </motion.button>
+                                );
+                            })}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 <AnimatePresence>
                     {debugError && (
                         <motion.div
@@ -209,5 +236,50 @@ export default function FolderExplorer({
                 className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize transition-colors"
             />
         </aside>
+    );
+}
+
+function SkeletonList({ accentHex }: { accentHex: string }) {
+    const widths = ['w-10/12', 'w-8/12', 'w-11/12', 'w-9/12', 'w-7/12', 'w-10/12', 'w-9/12', 'w-8/12'];
+    return (
+        <motion.div
+            initial="hidden"
+            animate="show"
+            variants={{
+                hidden: {},
+                show: { transition: { staggerChildren: 0.04 } },
+            }}
+        >
+            {widths.map((w, i) => (
+                <motion.div
+                    key={i}
+                    variants={{
+                        hidden: { opacity: 0, x: -6 },
+                        show: { opacity: 1, x: 0 },
+                    }}
+                    transition={{ duration: 0.2 }}
+                    className="flex items-center gap-2.5 px-3 py-2 border-l-2 border-transparent"
+                >
+                    <span className="shrink-0 w-3 h-3 rounded-sm bg-zinc-800/70" />
+                    <span
+                        className={`relative overflow-hidden h-3 rounded ${w} bg-zinc-800/70`}
+                    >
+                        <motion.span
+                            className="absolute inset-y-0 -left-1/2 w-1/2"
+                            style={{
+                                background: `linear-gradient(90deg, transparent, ${accentHex}33, transparent)`,
+                            }}
+                            animate={{ x: ['0%', '300%'] }}
+                            transition={{
+                                duration: 1.4,
+                                repeat: Infinity,
+                                ease: 'easeInOut',
+                                delay: i * 0.08,
+                            }}
+                        />
+                    </span>
+                </motion.div>
+            ))}
+        </motion.div>
     );
 }

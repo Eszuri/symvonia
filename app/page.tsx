@@ -20,6 +20,7 @@ const RESET_ON_CLOSE_KEY = 'music-app-reset-on-close';
 const FOLDER_SORT_KEY = 'music-app-folder-sort';
 const FILE_SORT_KEY = 'music-app-file-sort';
 const SORT_DIR_KEY = 'music-app-sort-dir';
+const NAME_SOURCE_KEY = 'music-app-name-source';
 const THEME_KEY = 'music-app-theme';
 const ACCENT_KEY = 'music-app-accent';
 const CUSTOM_ACCENT_KEY = 'music-app-custom-accent';
@@ -57,6 +58,7 @@ function loadSavedFolder(): string | null {
 export default function Home() {
     const [musicFolder, setMusicFolderState] = useState<string | null>(null);
     const [files, setFiles] = useState<FileEntry[]>([]);
+    const [loadingFiles, setLoadingFiles] = useState(false);
     const [currentPath, setCurrentPath] = useState<string | null>(null);
     const [selectedSong, setSelectedSong] = useState<FileEntry | null>(null);
     const [metadata, setMetadata] = useState<SongMetadata | null>(null);
@@ -132,6 +134,7 @@ export default function Home() {
     const [folderSort, setFolderSortState] = useState('name');
     const [fileSort, setFileSortState] = useState('name');
     const [sortDir, setSortDirState] = useState('asc');
+    const [nameSource, setNameSourceState] = useState('filename');
     const [formats, setFormatsState] = useState<string[]>(DEFAULT_FORMATS);
     const [theme, setThemeState] = useState('dark');
     const [shuffle, setShuffleState] = useState(false);
@@ -156,6 +159,7 @@ export default function Home() {
     const folderSortRef = useRef<string>('name');
     const fileSortRef = useRef<string>('name');
     const sortDirRef = useRef<string>('asc');
+    const nameSourceRef = useRef<string>('filename');
     const formatsRef = useRef<string[]>(DEFAULT_FORMATS);
     const shuffleRef = useRef(false);
     const repeatRef = useRef<'off' | 'all' | 'one'>('off');
@@ -240,6 +244,8 @@ export default function Home() {
         if (sh !== null) setShuffleState(sh === 'true');
         const rp = window.localStorage.getItem('music-app-repeat');
         if (rp === 'all' || rp === 'one') setRepeatState(rp);
+        const ns = window.localStorage.getItem(NAME_SOURCE_KEY);
+        if (ns === 'filename' || ns === 'title') setNameSourceState(ns);
     }, []);
 
     useEffect(() => {
@@ -275,6 +281,13 @@ export default function Home() {
         sortDirRef.current = sortDir;
         if (currentPath) loadFiles(currentPath);
     }, [sortDir, currentPath]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(NAME_SOURCE_KEY, nameSource);
+        nameSourceRef.current = nameSource;
+        if (currentPath) loadFiles(currentPath);
+    }, [nameSource, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -409,6 +422,8 @@ export default function Home() {
     }, []);
 
     const loadFiles = useCallback(async (dirPath: string) => {
+        const needsMetadata = nameSourceRef.current === 'title';
+        if (needsMetadata) setLoadingFiles(true);
         try {
             const mod = await getTauri();
             const result = await mod.invoke<FileEntry[]>('list_files', {
@@ -416,6 +431,7 @@ export default function Home() {
                 folderSort: folderSortRef.current,
                 fileSort: fileSortRef.current,
                 sortDir: sortDirRef.current,
+                nameSource: nameSourceRef.current,
                 formats: formatsRef.current,
             });
             setFiles(result);
@@ -424,6 +440,8 @@ export default function Home() {
             const msg = String(e);
             showError(msg);
             setFiles([]);
+        } finally {
+            if (needsMetadata) setLoadingFiles(false);
         }
     }, []);
 
@@ -878,6 +896,7 @@ export default function Home() {
                                 >
                                     <FolderExplorer
                                         files={files}
+                                        loading={loadingFiles}
                                         selectedSong={selectedSong}
                                         displayPath={displayPath}
                                         debugError={debugError}
@@ -980,6 +999,8 @@ export default function Home() {
                 setFileSort={setFileSortState}
                 sortDir={sortDir}
                 setSortDir={setSortDirState}
+                nameSource={nameSource}
+                setNameSource={setNameSourceState}
                 formats={formats}
                 setFormats={setFormatsState}
                 theme={theme}
