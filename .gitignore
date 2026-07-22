@@ -7,3 +7,5 @@ src-tauri/gen
 next-env.d.ts
 /.PrivateKey
 /.commandcode
+.env
+RELEASE.md
