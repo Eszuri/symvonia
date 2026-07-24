@@ -21,8 +21,46 @@ const FOLDER_SORT_KEY = 'music-app-folder-sort';
 const FILE_SORT_KEY = 'music-app-file-sort';
 const SORT_DIR_KEY = 'music-app-sort-dir';
 const NAME_SOURCE_KEY = 'music-app-name-source';
-const THEME_KEY = 'music-app-theme';
+const SHORTCUTS_KEY = 'music-app-shortcuts';
 const ACCENT_KEY = 'music-app-accent';
+
+// Shortcut action IDs. Each maps to one key on the keyboard. The user can
+// remap any of these via Settings → Shortcut; the binding is stored in
+// localStorage as `{ [actionId]: KeyboardEvent['key'] }`.
+type ShortcutAction = 'playPause' | 'next' | 'prev' | 'volumeUp' | 'volumeDown';
+
+const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
+    playPause: ' ',
+    next: 'n',
+    prev: 'p',
+    volumeUp: 'ArrowRight',
+    volumeDown: 'ArrowLeft',
+};
+
+const SHORTCUT_LABELS: Record<ShortcutAction, { label: string; description: string }> = {
+    playPause: { label: 'Play / Pause', description: 'Putar atau jeda lagu yang sedang diputar' },
+    next: { label: 'Next Track', description: 'Lanjut ke lagu berikutnya' },
+    prev: { label: 'Previous Track', description: 'Kembali ke lagu sebelumnya' },
+    volumeUp: { label: 'Volume Up', description: 'Naikkan volume (+5%)' },
+    volumeDown: { label: 'Volume Down', description: 'Turunkan volume (-5%)' },
+};
+
+// Normalise a KeyboardEvent.key to the form we store (handles case: 'n' vs 'N').
+function normaliseKey(key: string): string {
+    if (key === ' ') return ' ';
+    if (key.length === 1) return key.toLowerCase();
+    return key; // ArrowRight, ArrowLeft, Escape, F12, etc. — keep as-is
+}
+
+function formatKeyLabel(key: string): string {
+    if (key === ' ') return 'Space';
+    if (key === 'ArrowRight') return '→';
+    if (key === 'ArrowLeft') return '←';
+    if (key === 'ArrowUp') return '↑';
+    if (key === 'ArrowDown') return '↓';
+    if (key.length === 1) return key.toUpperCase();
+    return key;
+}
 const CUSTOM_ACCENT_KEY = 'music-app-custom-accent';
 const WALLPAPER_KEY = 'music-app-wallpaper';
 const FORMATS_KEY = 'music-app-formats';
@@ -52,13 +90,26 @@ function getTauri(): Promise<TauriCore> {
 
 function loadSavedFolder(): string | null {
     if (typeof window === 'undefined') return null;
-    return window.localStorage.getItem(FOLDER_STORAGE_KEY);
+    try {
+        return window.localStorage.getItem(FOLDER_STORAGE_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function safeSetLocalStorage(key: string, value: string) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch {
+        // Quota exceeded, private browsing, or storage disabled — silently skip.
+    }
 }
 
 export default function Home() {
     const [musicFolder, setMusicFolderState] = useState<string | null>(null);
     const [files, setFiles] = useState<FileEntry[]>([]);
     const [loadingFiles, setLoadingFiles] = useState(false);
+    const [initialized, setInitialized] = useState(false);
     const [currentPath, setCurrentPath] = useState<string | null>(null);
     const [selectedSong, setSelectedSong] = useState<FileEntry | null>(null);
     const [metadata, setMetadata] = useState<SongMetadata | null>(null);
@@ -136,7 +187,6 @@ export default function Home() {
     const [sortDir, setSortDirState] = useState('asc');
     const [nameSource, setNameSourceState] = useState('filename');
     const [formats, setFormatsState] = useState<string[]>(DEFAULT_FORMATS);
-    const [theme, setThemeState] = useState('dark');
     const [shuffle, setShuffleState] = useState(false);
     const [repeat, setRepeatState] = useState<'off' | 'all' | 'one'>('off');
     const [accentColor, setAccentColorState] = useState('green');
@@ -163,6 +213,14 @@ export default function Home() {
     const formatsRef = useRef<string[]>(DEFAULT_FORMATS);
     const shuffleRef = useRef(false);
     const repeatRef = useRef<'off' | 'all' | 'one'>('off');
+    const isMountedRef = useRef(true);
+    const playTokenRef = useRef(0);
+    const loadFilesTokenRef = useRef(0);
+    const settingsOpenRef = useRef(false);
+    const streamingOpenRef = useRef(false);
+    const pendingFolderChangeRef = useRef(false);
+    const [shortcuts, setShortcutsState] = useState<Record<ShortcutAction, string>>(DEFAULT_SHORTCUTS);
+    const shortcutsRef = useRef<Record<ShortcutAction, string>>(DEFAULT_SHORTCUTS);
 
     filesRef.current = files;
     selectedSongRef.current = selectedSong;
@@ -173,7 +231,7 @@ export default function Home() {
     const setMusicFolder = useCallback((folder: string | null) => {
         setMusicFolderState(folder);
         if (folder) {
-            window.localStorage.setItem(FOLDER_STORAGE_KEY, folder);
+            safeSetLocalStorage(FOLDER_STORAGE_KEY, folder);
         } else {
             window.localStorage.removeItem(FOLDER_STORAGE_KEY);
         }
@@ -202,7 +260,7 @@ export default function Home() {
     const setDefaultWallpaper = useCallback((path: string | null) => {
         setDefaultWallpaperState(path);
         if (path) {
-            window.localStorage.setItem(WALLPAPER_KEY, path);
+            safeSetLocalStorage(WALLPAPER_KEY, path);
         } else {
             window.localStorage.removeItem(WALLPAPER_KEY);
         }
@@ -230,10 +288,14 @@ export default function Home() {
         if (sd) setSortDirState(sd);
         const fm = window.localStorage.getItem(FORMATS_KEY);
         if (fm) {
-            try { setFormatsState(JSON.parse(fm)); } catch { /* ignore */ }
+            try {
+                const parsed = JSON.parse(fm);
+                // Guard against corrupted localStorage (e.g. object instead of array)
+                if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string' && x.length > 0)) {
+                    setFormatsState(parsed);
+                }
+            } catch { /* ignore */ }
         }
-        const th = window.localStorage.getItem(THEME_KEY);
-        if (th) setThemeState(th);
         const ac = window.localStorage.getItem(ACCENT_KEY);
         if (ac) setAccentColorState(ac);
         const ca = window.localStorage.getItem(CUSTOM_ACCENT_KEY);
@@ -246,16 +308,31 @@ export default function Home() {
         if (rp === 'all' || rp === 'one') setRepeatState(rp);
         const ns = window.localStorage.getItem(NAME_SOURCE_KEY);
         if (ns === 'filename' || ns === 'title') setNameSourceState(ns);
+        const sc = window.localStorage.getItem(SHORTCUTS_KEY);
+        if (sc) {
+            try {
+                const parsed = JSON.parse(sc);
+                if (parsed && typeof parsed === 'object') {
+                    // Merge with defaults so newly added actions still have a key
+                    setShortcutsState({ ...DEFAULT_SHORTCUTS, ...parsed });
+                }
+            } catch { /* ignore */ }
+        }
+        // Mark as ready after all persisted preferences are restored. This
+        // prevents a flash of the welcome screen followed by the folder
+        // explorer on refresh (first render always starts with musicFolder=null,
+        // but the in-memory state hasn't been hydrated yet).
+        setInitialized(true);
     }, []);
 
     useEffect(() => {
         if (!isBrowserTauri) return;
-        window.localStorage.setItem(AUTO_WALLPAPER_KEY, String(autoWallpaper));
+        safeSetLocalStorage(AUTO_WALLPAPER_KEY, String(autoWallpaper));
     }, [autoWallpaper]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(RESET_ON_CLOSE_KEY, String(resetOnClose));
+        safeSetLocalStorage(RESET_ON_CLOSE_KEY, String(resetOnClose));
         if (isBrowserTauri) {
             getTauri().then(mod => mod.invoke('set_reset_on_close', { enabled: resetOnClose })).catch(() => {});
         }
@@ -263,60 +340,55 @@ export default function Home() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(FOLDER_SORT_KEY, folderSort);
+        safeSetLocalStorage(FOLDER_SORT_KEY, folderSort);
         folderSortRef.current = folderSort;
         if (currentPath) loadFiles(currentPath);
     }, [folderSort, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(FILE_SORT_KEY, fileSort);
+        safeSetLocalStorage(FILE_SORT_KEY, fileSort);
         fileSortRef.current = fileSort;
         if (currentPath) loadFiles(currentPath);
     }, [fileSort, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(SORT_DIR_KEY, sortDir);
+        safeSetLocalStorage(SORT_DIR_KEY, sortDir);
         sortDirRef.current = sortDir;
         if (currentPath) loadFiles(currentPath);
     }, [sortDir, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(NAME_SOURCE_KEY, nameSource);
+        safeSetLocalStorage(NAME_SOURCE_KEY, nameSource);
         nameSourceRef.current = nameSource;
         if (currentPath) loadFiles(currentPath);
     }, [nameSource, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(FORMATS_KEY, JSON.stringify(formats));
+        safeSetLocalStorage(FORMATS_KEY, JSON.stringify(formats));
         formatsRef.current = formats;
         if (currentPath) loadFiles(currentPath);
     }, [formats, currentPath]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem('music-app-shuffle', String(shuffle));
+        safeSetLocalStorage('music-app-shuffle', String(shuffle));
         shuffleRef.current = shuffle;
     }, [shuffle]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem('music-app-repeat', repeat);
+        safeSetLocalStorage('music-app-repeat', repeat);
         repeatRef.current = repeat;
         if (audioRef.current) audioRef.current.loop = repeat === 'one';
     }, [repeat]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(THEME_KEY, theme);
-    }, [theme]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(ACCENT_KEY, accentColor);
+        safeSetLocalStorage(ACCENT_KEY, accentColor);
         if (accentColor === 'custom') {
             setCustomAccentVars(customAccentHex);
         } else {
@@ -326,7 +398,7 @@ export default function Home() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(CUSTOM_ACCENT_KEY, customAccentHex);
+        safeSetLocalStorage(CUSTOM_ACCENT_KEY, customAccentHex);
     }, [customAccentHex]);
 
     useEffect(() => {
@@ -336,19 +408,15 @@ export default function Home() {
         }).catch(() => {});
     }, [defaultWallpaper]);
 
-    useEffect(() => {
-        return () => {
-            if (isBrowserTauri) {
-                getTauri().then(mod =>
-                    mod.invoke('clear_wallpaper')
-                ).catch(() => {});
-            }
-        };
-    }, []);
+    // Note: wallpaper reset on app close is handled by Rust's RunEvent::Exit
+    // (see src-tauri/src/lib.rs). React unmount runs on hot-reload too, so
+    // doing it here would (a) conflict with the Rust handler and (b) make
+    // the "Reset on close" toggle meaningless.
 
     // Stream URL listener — always active even when streaming modal is closed
     useEffect(() => {
         if (!isBrowserTauri) return;
+        let cancelled = false;
         let unlisten: (() => void) | null = null;
         import('@tauri-apps/api/event').then(({ listen }) => {
             listen<string>('stream-url-changed', (event) => {
@@ -359,17 +427,33 @@ export default function Home() {
                     const entries: Array<{ url: string; timestamp: number; domain: string }> = raw ? JSON.parse(raw) : [];
                     entries.unshift({ url, timestamp: Date.now(), domain });
                     const unique = entries.filter((e, i, a) => a.findIndex(x => x.url === e.url) === i).slice(0, 200);
-                    localStorage.setItem('music-app-stream-history', JSON.stringify(unique));
+                    try {
+                        localStorage.setItem('music-app-stream-history', JSON.stringify(unique));
+                    } catch {}
                 } catch {}
-            }).then((fn) => { unlisten = fn; });
+            }).then((fn) => {
+                if (cancelled) {
+                    // Component unmounted before listen() resolved — unregister immediately
+                    fn();
+                } else {
+                    unlisten = fn;
+                }
+            });
         });
-        return () => { unlisten?.(); };
+        return () => {
+            cancelled = true;
+            unlisten?.();
+        };
     }, []);
 
     useEffect(() => {
         const isInputFocused = () => {
             const el = document.activeElement;
-            return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+            if (!el) return false;
+            const tag = el.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+            if ((el as HTMLElement).isContentEditable) return true;
+            return false;
         };
 
         const handleKey = (e: KeyboardEvent) => {
@@ -380,34 +464,46 @@ export default function Home() {
                 return;
             }
 
-            // Don't trigger shortcuts while typing in inputs or when modals are open
+            // Don't trigger shortcuts while typing in inputs
             if (isInputFocused()) return;
 
-            switch (e.key) {
-                case ' ':
-                    e.preventDefault();
+            // Don't trigger shortcuts when any modal is open.
+            if (settingsOpenRef.current || streamingOpenRef.current || pendingFolderChangeRef.current) return;
+
+            // Look up which action (if any) this key is bound to. Match either
+            // the stored value or its lowercase form so 'N' still matches 'n'.
+            const key = e.key;
+            const keyLower = key.length === 1 ? key.toLowerCase() : key;
+            const map = shortcutsRef.current;
+            let action: ShortcutAction | null = null;
+            for (const a of Object.keys(map) as ShortcutAction[]) {
+                const bound = map[a];
+                if (bound === key || bound === keyLower) {
+                    action = a;
+                    break;
+                }
+            }
+            if (!action) return;
+
+            e.preventDefault();
+            switch (action) {
+                case 'playPause':
                     togglePlayPauseRef.current();
                     break;
-                case 'n':
-                case 'N':
-                    e.preventDefault();
+                case 'next':
                     playNextRef.current();
                     break;
-                case 'p':
-                case 'P':
-                    e.preventDefault();
+                case 'prev':
                     playPrevRef.current();
                     break;
-                case 'ArrowRight':
-                    e.preventDefault();
+                case 'volumeUp':
                     setVolume(prev => {
                         const v = Math.min(1, Math.round((prev + 0.05) * 20) / 20);
                         if (audioRef.current) audioRef.current.volume = v;
                         return v;
                     });
                     break;
-                case 'ArrowLeft':
-                    e.preventDefault();
+                case 'volumeDown':
                     setVolume(prev => {
                         const v = Math.max(0, Math.round((prev - 0.05) * 20) / 20);
                         if (audioRef.current) audioRef.current.volume = v;
@@ -421,7 +517,24 @@ export default function Home() {
         return () => window.removeEventListener('keydown', handleKey);
     }, []);
 
+    const updateShortcut = useCallback((action: string, newKey: string) => {
+        setShortcutsState(prev => {
+            const next = { ...prev, [action]: newKey };
+            shortcutsRef.current = next as Record<ShortcutAction, string>;
+            safeSetLocalStorage(SHORTCUTS_KEY, JSON.stringify(next));
+            return next as Record<ShortcutAction, string>;
+        });
+    }, []);
+
+    const resetShortcuts = useCallback(() => {
+        setShortcutsState(DEFAULT_SHORTCUTS);
+        shortcutsRef.current = DEFAULT_SHORTCUTS;
+        safeSetLocalStorage(SHORTCUTS_KEY, JSON.stringify(DEFAULT_SHORTCUTS));
+    }, []);
+
     const loadFiles = useCallback(async (dirPath: string) => {
+        // Token: ignore stale results if the user navigates again before this one resolves.
+        const token = ++loadFilesTokenRef.current;
         const needsMetadata = nameSourceRef.current === 'title';
         if (needsMetadata) setLoadingFiles(true);
         try {
@@ -434,21 +547,28 @@ export default function Home() {
                 nameSource: nameSourceRef.current,
                 formats: formatsRef.current,
             });
+            // Bail if a newer loadFiles was kicked off or component unmounted.
+            if (token !== loadFilesTokenRef.current || !isMountedRef.current) return;
             setFiles(result);
             setDebugError('');
         } catch (e) {
+            if (token !== loadFilesTokenRef.current || !isMountedRef.current) return;
             const msg = String(e);
             showError(msg);
             setFiles([]);
         } finally {
-            if (needsMetadata) setLoadingFiles(false);
+            if (token === loadFilesTokenRef.current) setLoadingFiles(false);
         }
-    }, []);
+    }, [showError]);
 
-    const loadMetadata = useCallback(async (_filePath: string) => {
+    const loadMetadata = useCallback(async (filePath: string) => {
+        // Token: only apply metadata if this is still the latest request.
+        // Each call gets a unique ID; if a newer call starts, we ignore this result.
+        const token = ++playTokenRef.current;
         try {
             const mod = await getTauri();
-            const result = await mod.invoke<SongMetadata>('get_metadata', { filePath: _filePath });
+            const result = await mod.invoke<SongMetadata>('get_metadata', { filePath });
+            if (token !== playTokenRef.current || !isMountedRef.current) return;
             setMetadata(result);
             if (result.duration) setDuration(result.duration);
 
@@ -465,9 +585,10 @@ export default function Home() {
                 }
             }
         } catch {
+            if (token !== playTokenRef.current || !isMountedRef.current) return;
             setMetadata(null);
         }
-    }, []);
+    }, [showError]);
 
     useEffect(() => {
         if (currentPath) {
@@ -497,6 +618,7 @@ export default function Home() {
         audio.addEventListener('ended', handleEnded);
 
         return () => {
+            isMountedRef.current = false;
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
             audio.removeEventListener('timeupdate', handleTimeUpdate);
@@ -513,10 +635,14 @@ export default function Home() {
         const audio = audioRef.current;
         if (!audio) return;
 
-        if (filesRef.current.some(f => f.path === file.path)) {
-            playlistRef.current = filesRef.current.filter(f => !f.is_dir);
-        }
+        // Always refresh playlist from the currently visible file list, regardless
+        // of whether the clicked file is in the current list. This ensures
+        // playNext/playPrev use the right playlist after the user navigates
+        // folders and clicks a song from a different view.
+        playlistRef.current = filesRef.current.filter(f => !f.is_dir);
 
+        // Token: invalidate any in-flight loadMetadata from a previous playSong.
+        const token = ++playTokenRef.current;
         audio.pause();
 
         try {
@@ -532,14 +658,18 @@ export default function Home() {
             audio.loop = repeatRef.current === 'one';
             await audio.play();
 
+            // Bail if unmounted or a newer playSong started while we awaited.
+            if (token !== playTokenRef.current || !isMountedRef.current) return;
+
             setSelectedSong(file);
             loadMetadata(file.path);
             addLog('info', `Memutar: ${file.name}`);
         } catch (e) {
             if (e instanceof DOMException && e.name === 'AbortError') return;
-            console.error('Gagal play:', e);
+            // Surface real errors to the user (autoplay blocked, codec missing, etc.)
+            showError(`Gagal memutar: ${(e as Error).message || String(e)}`);
         }
-    }, [loadMetadata, addLog]);
+    }, [loadMetadata, addLog, showError]);
  
     const togglePlayPause = useCallback(() => {
         const audio = audioRef.current;
@@ -667,6 +797,13 @@ export default function Home() {
     const [updateStatus, setUpdateStatus] = useState('');
     const [updateDownloaded, setUpdateDownloaded] = useState(0);
     const [updateTotal, setUpdateTotal] = useState(0);
+    const updateTotalRef = useRef(0);
+
+    // Mirror modal state into refs so the keyboard-shortcut handler (registered
+    // once with empty deps) can read the latest values without re-binding.
+    settingsOpenRef.current = settingsOpen;
+    streamingOpenRef.current = streamingOpen;
+    pendingFolderChangeRef.current = pendingFolderChange;
 
     const doPickFolder = useCallback(async () => {
         try {
@@ -728,6 +865,7 @@ export default function Home() {
         setUpdateStatus('');
         setUpdateDownloaded(0);
         setUpdateTotal(0);
+        updateTotalRef.current = 0;
         try {
             const { check } = await import('@tauri-apps/plugin-updater');
             const update = await check();
@@ -735,13 +873,17 @@ export default function Home() {
                 setUpdateStatus(`v${update.version} tersedia. Mendownload...`);
                 await update.download((ev) => {
                     if (ev.event === 'Started') {
-                        setUpdateTotal(ev.data.contentLength ?? 0);
+                        const total = ev.data.contentLength ?? 0;
+                        updateTotalRef.current = total;
+                        setUpdateTotal(total);
                         setUpdateDownloaded(0);
                     } else if (ev.event === 'Progress') {
                         setUpdateDownloaded((d) => d + ev.data.chunkLength);
                     }
                 });
-                setUpdateDownloaded((d) => (updateTotal > 0 ? updateTotal : d));
+                // Snap to total on completion (avoids rounding leaving us at 99%).
+                const total = updateTotalRef.current;
+                if (total > 0) setUpdateDownloaded(total);
                 setUpdateStatus(`v${update.version} siap. Menginstall...`);
                 await update.install();
             } else {
@@ -755,8 +897,9 @@ export default function Home() {
             setUpdateChecking(false);
             setUpdateDownloaded(0);
             setUpdateTotal(0);
+            updateTotalRef.current = 0;
         }
-    }, [addLog, updateTotal]);
+    }, [addLog]);
 
     const confirmFolderChange = useCallback(() => {
         setPendingFolderChange(false);
@@ -871,7 +1014,18 @@ export default function Home() {
 
             <div className="flex flex-1 overflow-hidden">
                 <AnimatePresence mode="wait">
-                {!musicFolder ? (
+                {!initialized ? (
+                    <motion.div
+                        key="init-skeleton"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex-1"
+                    >
+                        <InitSkeleton />
+                    </motion.div>
+                ) : !musicFolder ? (
                     <motion.div
                         key="no-folder"
                         initial={{ opacity: 0, y: 8 }}
@@ -1010,8 +1164,9 @@ export default function Home() {
                 setNameSource={setNameSourceState}
                 formats={formats}
                 setFormats={setFormatsState}
-                theme={theme}
-                setTheme={setThemeState}
+                shortcuts={shortcuts}
+                updateShortcut={updateShortcut}
+                resetShortcuts={resetShortcuts}
                 accentColor={accentColor}
                 setAccentColor={setAccentColorState}
                 customAccentHex={customAccentHex}
@@ -1101,6 +1256,32 @@ function EmptyFolderState({ folder }: { folder: string }) {
             <p className="text-xs text-zinc-600 font-mono truncate max-w-full px-4" title={folder}>
                 {folder}
             </p>
+        </div>
+    );
+}
+
+function InitSkeleton() {
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <motion.div
+                className="flex flex-col items-center gap-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+            >
+                {/* App icon placeholder */}
+                <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 border border-zinc-700/30 flex items-center justify-center">
+                    <motion.div
+                        className="w-8 h-8 rounded-full bg-zinc-700/50"
+                        animate={{ scale: [1, 1.15, 1] }}
+                        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                </div>
+                {/* Title placeholder */}
+                <div className="w-40 h-5 rounded bg-zinc-800/50" />
+                {/* Subtitle placeholder */}
+                <div className="w-56 h-3 rounded bg-zinc-800/30" />
+            </motion.div>
         </div>
     );
 }

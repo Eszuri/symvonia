@@ -252,12 +252,27 @@ export default function StreamingModal({ open, onClose, accentColor }: Streaming
         }
     }, [open, handleEsc]);
 
+    // Sync history from localStorage when modal opens, and listen for new
+    // entries pushed by the global listener in page.tsx. Avoids polling
+    // (which previously ran every 2s regardless of activity).
     useEffect(() => {
         if (!open) return;
-        const interval = setInterval(() => {
-            setHistory(loadHistory());
-        }, 2000);
-        return () => clearInterval(interval);
+        setHistory(loadHistory());
+        if (!isBrowserTauri()) return;
+        let cancelled = false;
+        let unlisten: (() => void) | null = null;
+        import('@tauri-apps/api/event').then(({ listen }) => {
+            listen('stream-url-changed', () => {
+                if (!cancelled) setHistory(loadHistory());
+            }).then((fn) => {
+                if (cancelled) fn();
+                else unlisten = fn;
+            });
+        });
+        return () => {
+            cancelled = true;
+            unlisten?.();
+        };
     }, [open]);
 
     const openStream = useCallback(async (url: string, label: string, title: string) => {
