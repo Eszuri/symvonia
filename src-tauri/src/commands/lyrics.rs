@@ -93,7 +93,7 @@ pub fn search_online_lyrics(query: String) -> Result<Vec<LrclibItem>, String> {
         return Ok(Vec::new());
     }
     let url = format!("https://lrclib.net/api/search?q={}", url_encode(trimmed));
-    let req = ureq::get(&url).set("User-Agent", "Symvonia/1.0.5 (https://github.com/Eszuri/symvonia)");
+    let req = ureq::get(&url).set("User-Agent", "Symvonia/1.0.6 (https://github.com/Eszuri/symvonia)");
     match req.call() {
         Ok(res) => {
             let body = res.into_string().map_err(|e| format!("Failed to read response: {}", e))?;
@@ -132,7 +132,7 @@ pub fn fetch_online_lyrics(
     }
 
     let get_url = format!("https://lrclib.net/api/get?{}", query_params.join("&"));
-    let req = ureq::get(&get_url).set("User-Agent", "Symvonia/1.0.5 (https://github.com/Eszuri/symvonia)");
+    let req = ureq::get(&get_url).set("User-Agent", "Symvonia/1.0.6 (https://github.com/Eszuri/symvonia)");
 
     if let Ok(res) = req.call() {
         if let Ok(body) = res.into_string() {

@@ -5,6 +5,17 @@ import {type Lang} from '../../lib/translations';
 
 const changelogEn = [
     {
+        version: '1.0.6',
+        items: [
+            'Direct3D 11 Wallpaper Engine: Hardware-accelerated desktop shader engine with visual effects and cover art transitions.',
+            'Dual Wallpaper Modes: Dedicated controls for native Windows wallpaper (WinAPI) and Direct3D 11 shader engine.',
+            'Library Caching & Performance: Instant folder loading with native cache indexing and real-time directory watcher.',
+            'Customizable Toolbar Columns: Reorder, show, or hide audio metadata columns in the track explorer.',
+            'Storage & Cache Settings: New section to view disk usage and clear library cache.',
+            'Audio Engine Improvements: More reliable device handling and mode switching during playback.',
+        ],
+    },
+    {
         version: '1.0.5',
         items: [
             'Unified Audio Engine: Merged WASAPI Shared & Exclusive playback, Equalizer DSP, and Tag Editor into a single plugin.',
@@ -189,6 +200,17 @@ const changelogEn = [
 ];
 
 const changelogId = [
+    {
+        version: '1.0.6',
+        items: [
+            'Direct3D 11 Wallpaper Engine: Engine render shader desktop berbasis GPU dengan efek visual dan transisi cover art.',
+            'Pilihan Mode Wallpaper: Kontrol terpisah untuk Wallpaper Sistem (WinAPI) dan engine shader Direct3D 11.',
+            'Sistem Cache Library: Pemuatan folder instan dengan indexing cache native dan pemantauan direktori otomatis.',
+            'Kustomisasi Kolom Toolbar: Atur urutan, tampilkan, atau sembunyikan kolom metadata audio pada daftar lagu.',
+            'Menu Penyimpanan & Cache: Pemantauan penggunaan ruang penyimpanan dan pembersihan cache library.',
+            'Peningkatan Mesin Audio: Penanganan perangkat audio dan perpindahan mode output yang lebih stabil.',
+        ],
+    },
     {
         version: '1.0.5',
         items: [

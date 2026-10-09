@@ -706,7 +706,7 @@ function HomeContent() {
                     </div>
                 )}
                 <div className="flex items-center gap-3 shrink-0 text-zinc-600 text-[10px] uppercase tracking-wider font-semibold ml-3">
-                    <span>v1.0.5</span>
+                    <span>v1.0.6</span>
                     <span className="h-2.5 w-px bg-zinc-800" />
                     <span>Symvonia</span>
                 </div>
