@@ -1,11 +1,11 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useRef} from 'react';
 import {motion, AnimatePresence} from 'framer-motion';
 import {SettingGroup, SettingRow, ToggleStub, SelectStub} from './controls';
 import {t, type Lang} from '../../lib/translations';
 import {getAccent} from '../../lib/colors';
-import {useWallpaperPlugin} from '../../hooks/useWallpaperPlugin';
+import {useWallpaperPlugin, isWallpaperEngineActive} from '../../hooks/useWallpaperPlugin';
 import type {WallpaperFitMode, WallpaperEffect, WallpaperTransition} from '../../lib/storage';
 
 interface WallpaperSectionProps {
@@ -55,9 +55,18 @@ export default function WallpaperSection({
         setIntensity,
     } = useWallpaperPlugin();
 
+    const hasUserSelectedModeRef = useRef(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [wallpaperMode, setWallpaperMode] = useState<'system' | 'direct3d'>('system');
+    const [wallpaperMode, setWallpaperMode] = useState<'system' | 'direct3d'>(() => {
+        return (isEngineRunning || isWallpaperEngineActive()) ? 'direct3d' : 'system';
+    });
     const [wallpaperSrc, setWallpaperSrc] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!hasUserSelectedModeRef.current && isEngineRunning) {
+            setWallpaperMode('direct3d');
+        }
+    }, [isEngineRunning]);
 
     useEffect(() => {
         if (!defaultWallpaper) {
@@ -201,7 +210,10 @@ export default function WallpaperSection({
                                 type="button"
                                 role="radio"
                                 aria-checked={isSelected}
-                                onClick={() => setWallpaperMode(card.id)}
+                                onClick={() => {
+                                    hasUserSelectedModeRef.current = true;
+                                    setWallpaperMode(card.id);
+                                }}
                                 style={{
                                     borderColor: isSelected
                                         ? (accent.hex500 || '#38bdf8')
@@ -664,11 +676,11 @@ export default function WallpaperSection({
             </AnimatePresence>
 
             {/* Error message banner */}
-            {errorMsg && (
+            {(errorMsg || engineState.last_error) && (
                 <div className="px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
                     <p className="text-xs text-rose-400 flex items-start gap-2 leading-relaxed">
                         <span className="mt-0.5 text-sm">⚠️</span>
-                        <span className="flex-1 break-all">{errorMsg}</span>
+                        <span className="flex-1 break-all">{errorMsg || engineState.last_error}</span>
                     </p>
                 </div>
             )}

@@ -45,6 +45,8 @@ let globalEngineState: WallpaperEngineState = {
     last_error: null,
 };
 
+let globalAutoStarted = false;
+
 export function isWallpaperEngineActive(): boolean {
     if (globalEngineState.is_running) return true;
     if (typeof window !== 'undefined') {
@@ -66,7 +68,6 @@ export function useWallpaperPlugin() {
         intensity: getStoredValue('wallpaper_engine_intensity', 1.0),
     }));
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const autoStartedRef = useRef(false);
 
     const refreshStatus = useCallback(async () => {
         if (!isBrowserTauri()) return;
@@ -409,10 +410,10 @@ export function useWallpaperPlugin() {
 
     // Auto-start live wallpaper engine if enabled in saved config.json
     useEffect(() => {
-        if (pluginStatus.installed && !autoStartedRef.current && !globalEngineState.is_running) {
+        if (pluginStatus.installed && !globalAutoStarted && !globalEngineState.is_running) {
             const shouldAutoStart = getStoredValue('wallpaper_engine_enabled', false);
             if (shouldAutoStart) {
-                autoStartedRef.current = true;
+                globalAutoStarted = true;
                 startEngine({
                     fps: getStoredValue('wallpaper_engine_fps', 30),
                     intensity: getStoredValue('wallpaper_engine_intensity', 1.0),
@@ -420,7 +421,9 @@ export function useWallpaperPlugin() {
                     effect: getStoredValue('wallpaper_effect', 'none'),
                     transition: getStoredValue('wallpaper_transition', 'fade'),
                     texturePath: getStoredValue('default_wallpaper', null) || undefined,
-                }).catch(() => {});
+                }).catch(() => {
+                    globalAutoStarted = false;
+                });
             }
         }
     }, [pluginStatus.installed, startEngine]);

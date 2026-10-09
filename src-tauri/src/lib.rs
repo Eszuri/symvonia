@@ -88,6 +88,23 @@ pub fn run() {
                 let script = format!("window.__SYMVONIA_INITIAL_CONFIG__ = {};", json_str);
                 let _ = window.eval(&script);
             }
+
+            // Auto-start Direct3D 11 Wallpaper Engine if enabled and installed
+            let is_wallpaper_installed = wallpaper_plugin_manager::get_status(handle)
+                .map(|s| s.installed)
+                .unwrap_or(false);
+            if is_wallpaper_installed && initial_config.wallpaper_engine_enabled {
+                let _ = sidecar_wallpaper::start_engine(
+                    handle,
+                    Some(initial_config.wallpaper_engine_fps),
+                    Some(initial_config.wallpaper_engine_intensity),
+                    initial_config.default_wallpaper.clone(),
+                    Some(initial_config.wallpaper_fit_mode.clone()),
+                    Some(initial_config.wallpaper_effect.clone()),
+                    Some(initial_config.wallpaper_transition.clone()),
+                );
+            }
+
             Ok(())
         })
         .on_page_load(|window, _payload| {
