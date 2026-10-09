@@ -132,7 +132,7 @@ export default function WallpaperSection({
         {
             id: 'system',
             title: t(lang, 'wallpaper.mode.system'),
-            desc: t(lang, 'wallpaper.mode.systemSummary') || 'Sinkronisasi cover art lagu ke desktop Windows secara native tanpa beban GPU.',
+            desc: t(lang, 'wallpaper.mode.systemSummary'),
             icon: (isSelected: boolean) => (
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -155,7 +155,7 @@ export default function WallpaperSection({
         {
             id: 'direct3d',
             title: t(lang, 'wallpaper.mode.direct3d'),
-            desc: t(lang, 'wallpaper.mode.direct3dSummary') || 'Shader dinamis bertenaga GPU di balik ikon desktop dengan animasi reaktif.',
+            desc: t(lang, 'wallpaper.mode.direct3dSummary'),
             icon: (isSelected: boolean) => (
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -383,7 +383,7 @@ export default function WallpaperSection({
                                                 {wallpaperSrc ? (
                                                     <img
                                                         src={wallpaperSrc}
-                                                        alt="Default Wallpaper"
+                                                        alt={t(lang, 'general.wallpaperDefault.title')}
                                                         className="w-full h-full object-cover"
                                                         onError={() => setWallpaperSrc(null)}
                                                     />
@@ -451,10 +451,10 @@ export default function WallpaperSection({
                                             </div>
                                             <div>
                                                 <div className="text-xs font-semibold text-zinc-300 group-hover:text-white transition-colors">
-                                                    {lang === 'id' ? 'Pilih Berkas Wallpaper Default' : 'Select Default Wallpaper File'}
+                                                    {t(lang, 'general.wallpaperDefault.selectFile')}
                                                 </div>
                                                 <div className="text-[11px] text-zinc-500">
-                                                    {lang === 'id' ? 'Format didukung: .jpg, .png, .webp' : 'Supported formats: .jpg, .png, .webp'}
+                                                    {t(lang, 'general.wallpaperDefault.supportedFormats')}
                                                 </div>
                                             </div>
                                         </div>
@@ -480,7 +480,7 @@ export default function WallpaperSection({
                     </motion.div>
                 )}
 
-                {/* 2. Mode: Direct3D 11 Live Wallpaper */}
+                {/* 2. Mode: Direct3D 11 Shader Engine */}
                 {wallpaperMode === 'direct3d' && (
                     <motion.div
                         key="mode-direct3d"
@@ -527,13 +527,13 @@ export default function WallpaperSection({
                                                     : 'bg-zinc-600'
                                             }`} />
                                             {isEngineRunning
-                                                ? (t(lang, 'wallpaper.engine.statusRunning') || 'Sedang Berjalan (Aktif)')
-                                                : (t(lang, 'wallpaper.engine.statusStopped') || 'Standby (Nonaktif)')
+                                                ? t(lang, 'wallpaper.engine.statusRunning')
+                                                : t(lang, 'wallpaper.engine.statusStopped')
                                             }
                                         </div>
 
                                         <span className="text-[11px] text-zinc-500 font-mono tracking-tight">
-                                            {t(lang, 'wallpaper.engine.statusSpecs') || 'Direct3D 11.0 • HLSL Shaders • Zero Desktop UI Block'}
+                                            {t(lang, 'wallpaper.engine.statusSpecs')}
                                         </span>
                                     </div>
 
