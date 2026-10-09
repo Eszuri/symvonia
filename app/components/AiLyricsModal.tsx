@@ -4,11 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { t, type Lang } from '../lib/translations';
 import { useAiLyricsPlugin } from '../hooks/useAiLyricsPlugin';
-import { isBrowserTauri, getTauri } from '../lib/homeState';
 import { getAccent } from '../lib/colors';
 import { getStoredValue, setStoredValue } from '../lib/storage';
 
-export interface AiModelSpec {
+interface AiModelSpec {
     code: string;
     label: string;
     sizeText: string;

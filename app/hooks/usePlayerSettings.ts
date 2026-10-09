@@ -9,7 +9,6 @@ import {
 import {
     getInitialConfig,
     normalizeOutputMode,
-    normalizeWallpaperTransition,
     setStoredValue,
     syncConfigFromBackend,
     type OutputMode,

@@ -1,6 +1,6 @@
 import type {OutputMode} from '../../lib/storage';
 
-export type PlaybackRuntimeStatus =
+type PlaybackRuntimeStatus =
     | 'idle'
     | 'loading'
     | 'starting'
@@ -11,7 +11,7 @@ export type PlaybackRuntimeStatus =
     | 'error'
     | 'unavailable';
 
-export interface PlaybackRuntimeError {
+interface PlaybackRuntimeError {
     code?: string;
     message: string;
     context?: string;

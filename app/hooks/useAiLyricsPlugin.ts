@@ -43,7 +43,7 @@ export interface ModelDownloadProgress {
     totalBytes?: number;
 }
 
-export function normalizeAiModelCode(name: string): string {
+function normalizeAiModelCode(name: string): string {
     if (!name) return '';
     const lower = name.toLowerCase();
     if (lower.includes('vocal') || lower.includes('onnx') || lower.includes('htdemucs')) return 'vocal';
@@ -61,13 +61,6 @@ let globalDownloadedModels: string[] = [];
 let globalPluginStatus: AiPluginStatus = { installed: false };
 let globalDownloadingModels: Record<string, ModelDownloadProgress> = {};
 let globalSystemSpecs: SystemSpecsInfo | null = null;
-
-export function emitDownloadedModelsChanged(models: string[]) {
-    globalDownloadedModels = models;
-    if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('ai-lyrics-models-changed', { detail: models }));
-    }
-}
 
 export function useAiLyricsPlugin() {
     const [pluginStatus, setPluginStatus] = useState<AiPluginStatus>(globalPluginStatus);

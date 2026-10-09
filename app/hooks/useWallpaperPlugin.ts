@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getTauri, isBrowserTauri } from '../lib/homeState';
 import { getStoredValue, setStoredValue, type WallpaperFitMode, type WallpaperEffect, type WallpaperTransition } from '../lib/storage';
 

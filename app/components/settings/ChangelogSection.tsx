@@ -395,7 +395,6 @@ const changelogId = [
     },
 ];
 
-export {changelogEn, changelogId};
 
 export default function ChangelogSection({lang}: {lang: Lang}) {
     const data = lang === 'id' ? changelogId : changelogEn;

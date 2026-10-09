@@ -28,8 +28,6 @@ import {resetAppConfig} from "./lib/storage";
 import {useModalRouter} from "./hooks/useModalRouter";
 import {useGlobalContextMenu} from "./hooks/useGlobalContextMenu";
 import {useBitPerfectEngine} from "./hooks/useBitPerfectEngine";
-import {useEqualizerPlugin} from "./hooks/useEqualizerPlugin";
-import {useTagEditorPlugin} from "./hooks/useTagEditorPlugin";
 
 export default function Home() {
     const mounted = useSyncExternalStore(

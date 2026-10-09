@@ -3,20 +3,20 @@
 // M2: Import from dedicated tauri module to break circular dependency with homeState.ts
 import { getTauri } from './tauri';
 
-export interface EqualizerConfig {
+interface EqualizerConfig {
     enabled: boolean;
     preset: string;
     bands: number[];
     pre_amp: number;
 }
 
-export interface SessionConfig {
+interface SessionConfig {
     file_path: string;
     current_time: number;
     timestamp: number;
 }
 
-export interface StreamEntryConfig {
+interface StreamEntryConfig {
     id: string;
     title: string;
     url: string;
@@ -47,26 +47,7 @@ export function normalizeOutputMode(value: unknown): OutputMode {
     return 'html_audio';
 }
 
-export function normalizeWallpaperFitMode(value: unknown): WallpaperFitMode {
-    if (value === 'fit' || value === 'stretch' || value === 'center' || value === 'tile' || value === 'span') {
-        return value;
-    }
-    return 'fill';
-}
 
-export function normalizeWallpaperEffect(value: unknown): WallpaperEffect {
-    if (value === 'reactive_glow' || value === 'subtle_pulse' || value === 'cinematic_vignette' || value === 'grayscale' || value === 'dimmed') {
-        return value;
-    }
-    return 'none';
-}
-
-export function normalizeWallpaperTransition(value: unknown): WallpaperTransition {
-    if (value === 'zoom_in' || value === 'zoom_out' || value === 'slide' || value === 'none') {
-        return value;
-    }
-    return 'fade';
-}
 
 export interface SymvoniaConfig {
     music_folder: string | null;
@@ -116,7 +97,7 @@ export interface SymvoniaConfig {
     toolbar_columns: string[];
 }
 
-export const DEFAULT_CONFIG: SymvoniaConfig = {
+const DEFAULT_CONFIG: SymvoniaConfig = {
     music_folder: null,
     language: 'en',
     accent_color: 'sky',
@@ -229,22 +210,7 @@ export function syncConfigFromBackend(backendConfig: Partial<SymvoniaConfig>): S
     return updated;
 }
 
-/**
- * Fetch full configuration from Rust backend and update storage
- */
-export async function loadConfigFromBackend(): Promise<SymvoniaConfig | null> {
-    if (typeof window === 'undefined') return null;
-    try {
-        const tauri = await getTauri();
-        const cfg = await tauri.invoke<SymvoniaConfig>('get_app_config');
-        if (cfg) {
-            return syncConfigFromBackend(cfg);
-        }
-    } catch (err) {
-        console.error('[Symvonia Storage] Failed to load config from backend:', err);
-    }
-    return null;
-}
+
 
 /**
  * Read a stored configuration value synchronously from in-memory / injected cache

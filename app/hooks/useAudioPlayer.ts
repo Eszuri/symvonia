@@ -1279,7 +1279,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
     useEffect(() => {
         if (previousRequestedModeRef.current === outputMode) return;
-        const prevMode = previousRequestedModeRef.current;
         previousRequestedModeRef.current = outputMode;
 
         // If this is the initial config load before session restore, just sync the ref

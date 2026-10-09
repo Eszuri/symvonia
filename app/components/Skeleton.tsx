@@ -11,7 +11,7 @@ interface SkeletonProps {
     animate?: boolean;
 }
 
-export function Skeleton({
+function Skeleton({
     accentColor = "violet",
     className = "",
     variant = "rect",
@@ -157,7 +157,7 @@ function VolumeControlSkeleton({accentColor = "violet"}: {accentColor?: string})
     );
 }
 
-export function MetadataPanelSkeleton({accentColor = "violet"}: {accentColor?: string}) {
+function MetadataPanelSkeleton({accentColor = "violet"}: {accentColor?: string}) {
     return (
         <div className="space-y-4">
             <Skeleton accentColor={accentColor} variant="cover" className="w-full max-w-40 mx-auto ring-1 ring-white/5" />

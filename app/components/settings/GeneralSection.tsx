@@ -1,6 +1,6 @@
 'use client';
 
-import {useCallback, useEffect, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {motion} from 'framer-motion';
 import type {KeyboardEvent} from 'react';
 import {getAccent} from '../../lib/colors';
