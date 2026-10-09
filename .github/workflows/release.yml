@@ -59,25 +59,32 @@ jobs:
       - name: Build C# AI Lyrics Plugin
         run: dotnet publish plugin/src-ai-lyrics/AiLyricsPlugin.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o plugin/src-ai-lyrics/publish
 
+      - name: Build Standalone Wallpaper Engine Plugin
+        run: cmd /c build-plugin-wallpaper.bat
+
       - name: Calculate and export plugin SHA-256 hashes
         shell: pwsh
         run: |
           $audioPath = "plugin/src-engine/publish/symvonia-audio-engine.exe"
           $aiPath = "plugin/src-ai-lyrics/publish/symvonia-ai-lyrics.exe"
+          $wallpaperPath = "plugin/src-wallpaper-engine/publish/symvonia-wallpaper-engine.exe"
           $audioHash = (Get-FileHash -LiteralPath $audioPath -Algorithm SHA256).Hash.ToLowerInvariant()
           $aiHash = (Get-FileHash -LiteralPath $aiPath -Algorithm SHA256).Hash.ToLowerInvariant()
-          foreach ($hash in @($audioHash, $aiHash)) {
+          $wallpaperHash = (Get-FileHash -LiteralPath $wallpaperPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          foreach ($hash in @($audioHash, $aiHash, $wallpaperHash)) {
             if ($hash -notmatch '^[0-9a-f]{64}$') {
               throw "Invalid SHA-256 value generated for a plugin artifact."
             }
           }
           "SYMVONIA_AUDIO_PLUGIN_SHA256=$audioHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "SYMVONIA_AI_PLUGIN_SHA256=$aiHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SYMVONIA_WALLPAPER_PLUGIN_SHA256=$wallpaperHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "SYMVONIA_PLUGIN_RELEASE_TAG=${{ github.ref_name }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $checksumPath = Join-Path $env:RUNNER_TEMP "plugin-sha256sums.txt"
           @(
             "$audioHash  symvonia-audio-engine.exe"
             "$aiHash  symvonia-ai-lyrics.exe"
+            "$wallpaperHash  symvonia-wallpaper-engine.exe"
           ) | Set-Content -Path $checksumPath -Encoding ascii
           "SYMVONIA_PLUGIN_CHECKSUM_PATH=$checksumPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -114,7 +121,7 @@ jobs:
             }
           }
 
-      - name: Upload C# Plugins ke Release
+      - name: Upload Plugins ke Release
         if: success()
         shell: pwsh
         env:
@@ -123,4 +130,5 @@ jobs:
           $tag = "${{ github.ref_name }}"
           gh release upload $tag "plugin/src-engine/publish/symvonia-audio-engine.exe" --clobber
           gh release upload $tag "plugin/src-ai-lyrics/publish/symvonia-ai-lyrics.exe" --clobber
+          gh release upload $tag "plugin/src-wallpaper-engine/publish/symvonia-wallpaper-engine.exe" --clobber
           gh release upload $tag "$env:SYMVONIA_PLUGIN_CHECKSUM_PATH" --clobber
