@@ -88,7 +88,7 @@ export default function WallpaperSection({
                 await startEngine({
                     fps: engineState.fps || 30,
                     intensity: engineState.intensity ?? 1.0,
-                    texturePath: defaultWallpaper || undefined,
+                    texturePath: undefined,
                     fitMode: wallpaperFitMode,
                     effect: wallpaperEffect,
                     transition: wallpaperTransition,

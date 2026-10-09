@@ -168,7 +168,7 @@ fn reapply_current_wallpaper() {
         if let Some(ref def_path) = *def_guard {
             let path = Path::new(def_path);
             if path.exists() {
-                let _ = clear_wallpaper_internal();
+                let _ = clear_wallpaper_internal(true);
             }
         }
     }
@@ -255,7 +255,7 @@ pub fn apply_wallpaper(_bmp_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn clear_wallpaper_internal() -> Result<(), String> {
+pub fn clear_wallpaper_internal(apply_to_system: bool) -> Result<(), String> {
     let guard = DEFAULT_WALLPAPER_PATH.lock().map_err(|e| e.to_string())?;
     let temp_dir = std::env::temp_dir();
     let timestamp = std::time::SystemTime::now()
@@ -270,7 +270,11 @@ pub fn clear_wallpaper_internal() -> Result<(), String> {
             let bmp_path = temp_dir.join(format!("mw-def-{}.bmp", timestamp));
             img.save_with_format(&bmp_path, image::ImageFormat::Bmp)
                 .map_err(|e| format!("Failed to save BMP: {}", e))?;
-            let res = apply_wallpaper(&bmp_path);
+            let res = if apply_to_system {
+                apply_wallpaper(&bmp_path)
+            } else {
+                Ok(())
+            };
             (bmp_path, res)
         } else {
             // Fallback: Solid black wallpaper
@@ -278,7 +282,11 @@ pub fn clear_wallpaper_internal() -> Result<(), String> {
             let black_img = image::RgbImage::new(1920, 1080);
             black_img.save_with_format(&bmp_path, image::ImageFormat::Bmp)
                 .map_err(|e| format!("Failed to save solid black BMP: {}", e))?;
-            let res = apply_wallpaper(&bmp_path);
+            let res = if apply_to_system {
+                apply_wallpaper(&bmp_path)
+            } else {
+                Ok(())
+            };
             (bmp_path, res)
         }
     } else {
@@ -287,7 +295,11 @@ pub fn clear_wallpaper_internal() -> Result<(), String> {
         let black_img = image::RgbImage::new(1920, 1080);
         black_img.save_with_format(&bmp_path, image::ImageFormat::Bmp)
             .map_err(|e| format!("Failed to save solid black BMP: {}", e))?;
-        let res = apply_wallpaper(&bmp_path);
+        let res = if apply_to_system {
+            apply_wallpaper(&bmp_path)
+        } else {
+            Ok(())
+        };
         (bmp_path, res)
     };
 
@@ -314,20 +326,21 @@ pub fn clear_wallpaper_internal() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn clear_wallpaper() -> Result<(), String> {
+pub async fn clear_wallpaper(apply_to_system: Option<bool>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        clear_wallpaper_internal()
+        clear_wallpaper_internal(apply_to_system.unwrap_or(true))
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-pub async fn set_wallpaper(cover_b64: String) -> Result<(), String> {
+pub async fn set_wallpaper(cover_b64: String, apply_to_system: Option<bool>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         use base64::engine::general_purpose::STANDARD as engine;
         use base64::Engine;
 
+        let should_apply_system = apply_to_system.unwrap_or(true);
         let data = engine.decode(&cover_b64).map_err(|e| format!("Base64 decode error: {}", e))?;
 
         let img = image::load_from_memory(&data)
@@ -343,7 +356,11 @@ pub async fn set_wallpaper(cover_b64: String) -> Result<(), String> {
         img.save_with_format(&bmp_path, image::ImageFormat::Bmp)
             .map_err(|e| format!("Gagal save BMP: {}", e))?;
 
-        let res = apply_wallpaper(&bmp_path);
+        let res = if should_apply_system {
+            apply_wallpaper(&bmp_path)
+        } else {
+            Ok(())
+        };
 
         if let Ok(mut cur_guard) = CURRENT_WALLPAPER_BMP_PATH.lock() {
             *cur_guard = Some(bmp_path.to_string_lossy().to_string());
@@ -421,13 +438,13 @@ pub fn stop_wallpaper_engine() -> Result<(), String> {
             if path.exists() {
                 let _ = apply_wallpaper(path);
             } else {
-                let _ = clear_wallpaper_internal();
+                let _ = clear_wallpaper_internal(true);
             }
         } else {
-            let _ = clear_wallpaper_internal();
+            let _ = clear_wallpaper_internal(true);
         }
     } else {
-        let _ = clear_wallpaper_internal();
+        let _ = clear_wallpaper_internal(true);
     }
 
     Ok(())

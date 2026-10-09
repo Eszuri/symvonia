@@ -357,7 +357,7 @@ pub fn run() {
             ai_lyrics_plugin_manager::cancel_download();
             wallpaper_plugin_manager::cancel_download();
             if commands::wallpaper::RESET_ON_CLOSE.load(Ordering::SeqCst) {
-                let _ = commands::wallpaper::clear_wallpaper_internal();
+                let _ = commands::wallpaper::clear_wallpaper_internal(true);
             }
         }
     });

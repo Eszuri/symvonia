@@ -45,6 +45,14 @@ let globalEngineState: WallpaperEngineState = {
     last_error: null,
 };
 
+export function isWallpaperEngineActive(): boolean {
+    if (globalEngineState.is_running) return true;
+    if (typeof window !== 'undefined') {
+        return getStoredValue('wallpaper_engine_enabled', false);
+    }
+    return false;
+}
+
 export function useWallpaperPlugin() {
     const [pluginStatus, setPluginStatus] = useState<WallpaperPluginStatus>(globalPluginStatus);
     const [isDownloading, setIsDownloading] = useState(false);

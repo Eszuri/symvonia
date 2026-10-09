@@ -18,6 +18,7 @@ import {useVolumeFade} from "./audio/useVolumeFade";
 import {useAudioSrc} from "./audio/useAudioSrc";
 import type {PlaybackRuntimeInfo} from "./audio/playbackTypes";
 import {listenTauri, type LibraryCacheInvalidatedEvent} from "../lib/tauri";
+import {isWallpaperEngineActive} from "./useWallpaperPlugin";
 
 interface UseAudioPlayerOptions {
     lang: Lang;
@@ -299,14 +300,21 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
     /** Apply wallpaper from current metadata*/
     const applyWallpaper = useCallback(
         async (meta: SongMetadata, token?: number) => {
-            if (!isBrowserTauri() || !autoWallpaperRef.current) return;
+            const isEngineActive = isWallpaperEngineActive();
+            const shouldApplyToSystem = autoWallpaperRef.current;
+            if (!isBrowserTauri() || (!shouldApplyToSystem && !isEngineActive)) return;
             try {
                 const mod = await getTauri();
                 if (token !== undefined && token !== metadataRequestRef.current) return;
                 if (meta.cover_b64) {
-                    await mod.invoke("set_wallpaper", {coverB64: meta.cover_b64});
+                    await mod.invoke("set_wallpaper", {
+                        coverB64: meta.cover_b64,
+                        applyToSystem: shouldApplyToSystem,
+                    });
                 } else {
-                    await mod.invoke("clear_wallpaper");
+                    await mod.invoke("clear_wallpaper", {
+                        applyToSystem: shouldApplyToSystem,
+                    });
                 }
             } catch (e) {
                 showError(t(lang, 'log.wallpaperError', {msg: String(e)}));
@@ -574,8 +582,14 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             if (!isMountedRef.current) return;
             if (!session) {
                 sessionRestoreAttemptedRef.current = true;
-                if (isBrowserTauri() && autoWallpaperRef.current) {
-                    getTauri().then(mod => mod.invoke("clear_wallpaper")).catch(() => {});
+                if (isBrowserTauri() && (autoWallpaperRef.current || isWallpaperEngineActive())) {
+                    getTauri()
+                        .then(mod =>
+                            mod.invoke("clear_wallpaper", {
+                                applyToSystem: autoWallpaperRef.current,
+                            })
+                        )
+                        .catch(() => {});
                 }
                 done();
                 return;
