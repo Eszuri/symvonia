@@ -61,6 +61,7 @@ export default function WallpaperSection({
         return (isEngineRunning || isWallpaperEngineActive()) ? 'direct3d' : 'system';
     });
     const [wallpaperSrc, setWallpaperSrc] = useState<string | null>(null);
+    const activeWallpaperSrc = defaultWallpaper ? wallpaperSrc : null;
 
     useEffect(() => {
         if (!hasUserSelectedModeRef.current && isEngineRunning) {
@@ -69,10 +70,7 @@ export default function WallpaperSection({
     }, [isEngineRunning]);
 
     useEffect(() => {
-        if (!defaultWallpaper) {
-            setWallpaperSrc(null);
-            return;
-        }
+        if (!defaultWallpaper) return;
         let isMounted = true;
         import('@tauri-apps/api/core')
             .then(({convertFileSrc}) => {
@@ -392,9 +390,9 @@ export default function WallpaperSection({
                                         {/* Left: Thumbnail & Path Info */}
                                         <div className="flex items-center gap-3 min-w-0 flex-1">
                                             <div className="w-14 h-10 rounded-lg bg-zinc-800 border border-zinc-700/80 overflow-hidden shrink-0 flex items-center justify-center relative shadow-inner">
-                                                {wallpaperSrc ? (
+                                                {activeWallpaperSrc ? (
                                                     <img
-                                                        src={wallpaperSrc}
+                                                        src={activeWallpaperSrc}
                                                         alt={t(lang, 'general.wallpaperDefault.title')}
                                                         className="w-full h-full object-cover"
                                                         onError={() => setWallpaperSrc(null)}

@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useRef, useState, type ReactNode} from 'react';
+import {useEffect, useRef, useState, useCallback, useSyncExternalStore, type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {useHoverDescription} from '../../hooks/useHoverDescription';
 import {getAccent} from '../../lib/colors';
@@ -90,7 +90,11 @@ export function SelectStub({
     className?: string;
 }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [mounted, setMounted] = useState(false);
+    const mounted = useSyncExternalStore(
+        () => () => {},
+        () => true,
+        () => false,
+    );
     const [hoveredValue, setHoveredValue] = useState<string | null>(null);
     const [coords, setCoords] = useState<{
         left: number;
@@ -112,11 +116,7 @@ export function SelectStub({
     const selectedOption = options.find(([v]) => v === value);
     const displayLabel = selectedOption ? selectedOption[1] : (value || '');
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    const updatePosition = () => {
+    const updatePosition = useCallback(() => {
         if (!buttonRef.current) return;
         const rect = buttonRef.current.getBoundingClientRect();
 
@@ -149,7 +149,7 @@ export function SelectStub({
                 openUpward: false,
             });
         }
-    };
+    }, [fullWidth, options.length]);
 
     const handleToggle = () => {
         if (disabled) return;
@@ -197,7 +197,7 @@ export function SelectStub({
             window.removeEventListener('scroll', handleScrollOrResize, true);
             window.removeEventListener('resize', handleScrollOrResize);
         };
-    }, [isOpen, options.length, fullWidth]);
+    }, [isOpen, updatePosition]);
 
     return (
         <div className={`relative inline-block ${fullWidth ? 'w-full' : ''}`}>

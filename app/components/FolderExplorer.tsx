@@ -611,7 +611,7 @@ function FolderExplorer({
                 items,
             });
         },
-        [lang, onOpenToolbarEdit],
+        [lang, onOpenToolbarEdit, setContextMenu],
     );
 
     return (

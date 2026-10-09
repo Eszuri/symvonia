@@ -94,8 +94,11 @@ export function useWallpaperPlugin() {
     }, []);
 
     useEffect(() => {
-        refreshStatus();
-        refreshEngineState();
+        const timer = window.setTimeout(() => {
+            void refreshStatus();
+            void refreshEngineState();
+        }, 0);
+        return () => window.clearTimeout(timer);
     }, [refreshStatus, refreshEngineState]);
 
     useEffect(() => {
@@ -414,16 +417,19 @@ export function useWallpaperPlugin() {
             const shouldAutoStart = getStoredValue('wallpaper_engine_enabled', false);
             if (shouldAutoStart) {
                 globalAutoStarted = true;
-                startEngine({
-                    fps: getStoredValue('wallpaper_engine_fps', 30),
-                    intensity: getStoredValue('wallpaper_engine_intensity', 1.0),
-                    fitMode: getStoredValue('wallpaper_fit_mode', 'fill'),
-                    effect: getStoredValue('wallpaper_effect', 'none'),
-                    transition: getStoredValue('wallpaper_transition', 'fade'),
-                    texturePath: getStoredValue('default_wallpaper', null) || undefined,
-                }).catch(() => {
-                    globalAutoStarted = false;
-                });
+                const timer = window.setTimeout(() => {
+                    startEngine({
+                        fps: getStoredValue('wallpaper_engine_fps', 30),
+                        intensity: getStoredValue('wallpaper_engine_intensity', 1.0),
+                        fitMode: getStoredValue('wallpaper_fit_mode', 'fill'),
+                        effect: getStoredValue('wallpaper_effect', 'none'),
+                        transition: getStoredValue('wallpaper_transition', 'fade'),
+                        texturePath: getStoredValue('default_wallpaper', null) || undefined,
+                    }).catch(() => {
+                        globalAutoStarted = false;
+                    });
+                }, 0);
+                return () => window.clearTimeout(timer);
             }
         }
     }, [pluginStatus.installed, startEngine]);

@@ -190,7 +190,7 @@ function ToolbarEditModal({
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className={`text-xs font-semibold truncate ${isChecked ? 'text-zinc-100' : 'text-zinc-400'}`}>
-                                                                    {t(lang, col.labelKey as any)}
+                                                                    {t(lang, col.labelKey)}
                                                                 </span>
                                                                 {isLocked && (
                                                                     <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-medium tracking-wide">
@@ -199,7 +199,7 @@ function ToolbarEditModal({
                                                                 )}
                                                             </div>
                                                             <p className="text-[10px] text-zinc-500 truncate mt-0.5">
-                                                                {t(lang, col.descKey as any)}
+                                                                {t(lang, col.descKey)}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -264,7 +264,7 @@ function ToolbarEditModal({
                                                             </span>
                                                             <div className="min-w-0 truncate">
                                                                 <span className="truncate font-medium">
-                                                                    {colDef ? t(lang, colDef.labelKey as any) : colKey}
+                                                                    {colDef ? t(lang, colDef.labelKey) : colKey}
                                                                 </span>
                                                             </div>
                                                         </div>
