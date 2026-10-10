@@ -52,44 +52,154 @@ function Skeleton({
     );
 }
 
+const SKELETON_INIT_TITLE_WIDTHS = [
+    "w-[74%]",
+    "w-[58%]",
+    "w-[84%]",
+    "w-[66%]",
+    "w-[80%]",
+    "w-[54%]",
+    "w-[72%]",
+    "w-[62%]",
+];
+
+const SKELETON_INIT_ARTIST_WIDTHS = [
+    "w-[68%]",
+    "w-[50%]",
+    "w-[78%]",
+    "w-[58%]",
+    "w-[72%]",
+    "w-[46%]",
+];
+
 function FolderExplorerSkeleton({
     accentColor = "violet",
 }: {
     accentColor?: string;
 }) {
-    const widths = [
-        "w-10/12",
-        "w-8/12",
-        "w-11/12",
-        "w-9/12",
-        "w-7/12",
-        "w-10/12",
-        "w-9/12",
-        "w-8/12",
-    ];
     const accent = getAccent(accentColor);
 
     return (
-        <div className="py-1">
-            {widths.map((w, i) => (
-                <div
-                    key={i}
-                    className="flex items-center gap-2.5 px-3 py-2 border-l-2 border-transparent"
-                >
-                    <span className="shrink-0 w-3 h-3 rounded-sm bg-zinc-800/70" />
-                    <span className={`relative overflow-hidden h-3 rounded ${w} bg-zinc-800/70`}>
+        <div className="flex flex-col w-full h-full select-none pointer-events-none">
+            {/* Mock Column Headers */}
+            <div className="flex items-center px-3 py-1.5 bg-zinc-900 border-b border-zinc-800/60 gap-1 shrink-0">
+                <div style={{ width: 170, minWidth: 170 }} className="shrink-0 flex items-center">
+                    <div className="relative overflow-hidden h-2.5 w-12 rounded-xs bg-zinc-800/60">
                         <span
                             suppressHydrationWarning
-                            className="absolute inset-x-0 -top-1/2 h-1/2 pointer-events-none"
+                            className="absolute inset-0 pointer-events-none"
                             style={{
-                                background: `linear-gradient(0deg, transparent, ${accent.hex400}33, transparent)`,
-                                animation: "skeleton-shimmer-row 1.4s ease-in-out infinite",
-                                animationDelay: `${i * 0.08}s`,
+                                background: `linear-gradient(90deg, transparent, ${accent.hex400}20, transparent)`,
+                                animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
                             }}
                         />
-                    </span>
+                    </div>
                 </div>
-            ))}
+                <div style={{ width: 100, minWidth: 100 }} className="shrink-0 flex items-center px-1">
+                    <div className="relative overflow-hidden h-2.5 w-10 rounded-xs bg-zinc-800/60">
+                        <span
+                            suppressHydrationWarning
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                                background: `linear-gradient(90deg, transparent, ${accent.hex400}20, transparent)`,
+                                animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
+                                animationDelay: "0.1s",
+                            }}
+                        />
+                    </div>
+                </div>
+                <div className="flex-1 flex items-center justify-end px-1">
+                    <div className="relative overflow-hidden h-2.5 w-8 rounded-xs bg-zinc-800/60">
+                        <span
+                            suppressHydrationWarning
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                                background: `linear-gradient(90deg, transparent, ${accent.hex400}20, transparent)`,
+                                animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
+                                animationDelay: "0.2s",
+                            }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Mock Song Rows */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {Array.from({ length: 12 }).map((_, i) => {
+                    const delay = (i % 6) * 0.12;
+                    return (
+                        <div
+                            key={i}
+                            className="w-full flex items-center px-3 border-b border-zinc-900/40 gap-1 border-l-2 border-transparent"
+                            style={{ height: 36 }}
+                        >
+                            {/* Name col */}
+                            <div style={{ width: 170, minWidth: 170 }} className="shrink-0 flex items-center gap-2 pr-1 overflow-hidden">
+                                <div className="shrink-0 w-3.5 h-3.5 rounded-sm bg-zinc-800/80 relative overflow-hidden">
+                                    <span
+                                        suppressHydrationWarning
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                            background: `linear-gradient(90deg, transparent, ${accent.hex400}28, transparent)`,
+                                            animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
+                                            animationDelay: `${delay}s`,
+                                        }}
+                                    />
+                                </div>
+                                <div
+                                    className={`relative overflow-hidden h-3 rounded-xs bg-zinc-800/70 ${
+                                        SKELETON_INIT_TITLE_WIDTHS[i % SKELETON_INIT_TITLE_WIDTHS.length]
+                                    }`}
+                                >
+                                    <span
+                                        suppressHydrationWarning
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                            background: `linear-gradient(90deg, transparent, ${accent.hex400}28, transparent)`,
+                                            animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
+                                            animationDelay: `${delay + 0.04}s`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Artist col */}
+                            <div style={{ width: 100, minWidth: 100 }} className="shrink-0 flex items-center px-1 overflow-hidden">
+                                <div
+                                    className={`relative overflow-hidden h-2.5 rounded-xs bg-zinc-800/60 ${
+                                        SKELETON_INIT_ARTIST_WIDTHS[i % SKELETON_INIT_ARTIST_WIDTHS.length]
+                                    }`}
+                                >
+                                    <span
+                                        suppressHydrationWarning
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                            background: `linear-gradient(90deg, transparent, ${accent.hex400}22, transparent)`,
+                                            animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
+                                            animationDelay: `${delay + 0.08}s`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Duration col */}
+                            <div className="flex-1 flex items-center justify-end px-1 overflow-hidden">
+                                <div className="relative overflow-hidden h-2.5 w-8 rounded-xs bg-zinc-800/60 mr-0.5">
+                                    <span
+                                        suppressHydrationWarning
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                            background: `linear-gradient(90deg, transparent, ${accent.hex400}22, transparent)`,
+                                            animation: "skeleton-shimmer-h 1.8s ease-in-out infinite",
+                                            animationDelay: `${delay + 0.16}s`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -241,7 +351,7 @@ function InitSkeleton({accentColor = "sky"}: {accentColor?: string}) {
                     <Skeleton accentColor={accentColor} variant="text" className="flex-1 h-3" />
                     <Skeleton accentColor={accentColor} variant="button" className="w-7 h-7" />
                 </div>
-                <div className="flex-1 p-2 overflow-hidden">
+                <div className="flex-1 overflow-hidden">
                     <FolderExplorerSkeleton accentColor={accentColor} />
                 </div>
             </div>

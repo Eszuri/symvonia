@@ -4,7 +4,7 @@ import React, {memo, useCallback, useEffect, useMemo, useRef, useState} from 're
 import {AnimatePresence, motion} from 'framer-motion';
 import {getAccent} from '../lib/colors';
 import {t, type Lang} from '../lib/translations';
-import {contentMotion} from '../lib/animations';
+import {folderNavVariants} from '../lib/animations';
 import ContextMenu, {ContextMenuItem} from './ContextMenu';
 import {useHoverInfo} from '../contexts/HoverInfoContext';
 import {useHoverDescription} from '../hooks/useHoverDescription';
@@ -70,6 +70,23 @@ function isAncestorOf(folderPath: string, targetPath: string): boolean {
     const t = targetPath.toLowerCase();
     if (f === t) return false;
     return t.startsWith(f + '\\') || t.startsWith(f + '/');
+}
+
+function getPathDepth(p: string): number {
+    return p.replace(/\\/g, '/').split('/').filter(Boolean).length;
+}
+
+function isChildPath(child: string, parent: string): boolean {
+    const c = child.replace(/\\/g, '/').toLowerCase();
+    const p = parent.replace(/\\/g, '/').toLowerCase();
+    return c !== p && (c.startsWith(p + '/') || c.startsWith(p + '\\'));
+}
+
+function determineNavDirection(newPath: string, oldPath: string): 'forward' | 'backward' {
+    if (!oldPath || !newPath) return 'forward';
+    if (isChildPath(newPath, oldPath)) return 'forward';
+    if (isChildPath(oldPath, newPath)) return 'backward';
+    return getPathDepth(newPath) >= getPathDepth(oldPath) ? 'forward' : 'backward';
 }
 
 function formatSize(bytes: number): string {
@@ -419,6 +436,38 @@ function FolderExplorer({
     const [contextMenu, setContextMenu] = useState<{x: number; y: number; items: ContextMenuItem[]} | null>(null);
     const [copiedFeedback, setCopiedFeedback] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [navDirection, setNavDirection] = useState<'forward' | 'backward'>('forward');
+    const prevDisplayPathRef = useRef<string>(displayPath);
+
+    useEffect(() => {
+        if (prevDisplayPathRef.current !== displayPath) {
+            const prev = prevDisplayPathRef.current;
+            setNavDirection(determineNavDirection(displayPath, prev));
+        }
+    }, [displayPath]);
+
+    const handleGoUp = useCallback(() => {
+        setNavDirection('backward');
+        goUp();
+    }, [goUp]);
+
+    const handleEnterDir = useCallback(
+        (path: string) => {
+            setNavDirection('forward');
+            setCurrentPath(path);
+        },
+        [setCurrentPath],
+    );
+
+    const isFilesStale = useMemo(() => {
+        if (!displayPath || files.length === 0) return false;
+        const normDisplay = displayPath.replace(/\\/g, '/').toLowerCase();
+        const first = files[0];
+        const normFirst = first.path.replace(/\\/g, '/').toLowerCase();
+        return !normFirst.startsWith(normDisplay);
+    }, [files, displayPath]);
+
+    const showSkeleton = loading || isFilesStale;
 
     const isDraggingRef = useRef(false);
     const startXRef = useRef(0);
@@ -787,7 +836,7 @@ function FolderExplorer({
                 {/* Back/Parent button */}
                 <button
                     {...goUpHover}
-                    onClick={goUp}
+                    onClick={handleGoUp}
                     disabled={displayPath === musicFolder}
                     onContextMenu={(e: React.MouseEvent) => {
                         e.preventDefault();
@@ -813,7 +862,7 @@ function FolderExplorer({
                                             <path d="m15 18-6-6 6-6" />
                                         </svg>
                                     ),
-                                    onClick: goUp,
+                                    onClick: handleGoUp,
                                     disabled: displayPath === musicFolder,
                                 },
                             ],
@@ -976,53 +1025,81 @@ function FolderExplorer({
                     </div>
 
                     {/* Content List / Skeleton / Empty State */}
-                    <AnimatePresence mode="wait" initial={false}>
-                        {loading ? (
-                            <motion.div key="skeleton" {...contentMotion} className="py-1">
-                                <SkeletonList accentHex={accent.hex400} />
-                            </motion.div>
-                        ) : files.length === 0 ? (
-                            <motion.div
-                                key="empty"
-                                {...contentMotion}
-                                className="p-6 text-zinc-500 text-center text-xs flex flex-col items-center justify-center h-48 gap-2"
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="28"
-                                    height="28"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="1.5"
-                                    className="text-zinc-600"
+                    <div className="flex-1 w-full overflow-hidden">
+                        <AnimatePresence mode="wait" custom={navDirection} initial={false}>
+                            {showSkeleton ? (
+                                <motion.div
+                                    key={`skeleton-${displayPath}`}
+                                    custom={navDirection}
+                                    variants={folderNavVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    className="w-full"
                                 >
-                                    <circle cx="11" cy="11" r="8" />
-                                    <path d="m21 21-4.3-4.3" />
-                                </svg>
-                                <span>{t(lang, 'folder.empty')}</span>
-                            </motion.div>
-                        ) : (
-                            <VirtualList
-                                lang={lang}
-                                files={files}
-                                scrollTop={scrollTop}
-                                viewportH={viewportH}
-                                selectedPath={selectedSong?.path ?? null}
-                                playingAncestorPrefix={playingAncestorPrefix}
-                                onPick={playSong}
-                                onEnterDir={setCurrentPath}
-                                onContextDir={onContextDir}
-                                onContextFile={onContextFile}
-                                activeColumns={activeColumns}
-                                columnWidths={columnWidths}
-                                accentBg10={accent.bg10}
-                                accentText400={accent.text400}
-                                accentBorder500={accent.border500}
-                                accentBg30={accent.bg30}
-                            />
-                        )}
-                    </AnimatePresence>
+                                    <SkeletonList
+                                        activeColumns={activeColumns}
+                                        columnWidths={columnWidths}
+                                        accentHex={accent.hex400}
+                                    />
+                                </motion.div>
+                            ) : files.length === 0 ? (
+                                <motion.div
+                                    key={`empty-${displayPath}`}
+                                    custom={navDirection}
+                                    variants={folderNavVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    className="p-6 text-zinc-500 text-center text-xs flex flex-col items-center justify-center h-48 gap-2 select-none"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="28"
+                                        height="28"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.5"
+                                        className="text-zinc-600"
+                                    >
+                                        <circle cx="11" cy="11" r="8" />
+                                        <path d="m21 21-4.3-4.3" />
+                                    </svg>
+                                    <span>{t(lang, 'folder.empty')}</span>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key={`list-${displayPath}`}
+                                    custom={navDirection}
+                                    variants={folderNavVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    className="w-full"
+                                >
+                                    <VirtualList
+                                        lang={lang}
+                                        files={files}
+                                        scrollTop={scrollTop}
+                                        viewportH={viewportH}
+                                        selectedPath={selectedSong?.path ?? null}
+                                        playingAncestorPrefix={playingAncestorPrefix}
+                                        onPick={playSong}
+                                        onEnterDir={handleEnterDir}
+                                        onContextDir={onContextDir}
+                                        onContextFile={onContextFile}
+                                        activeColumns={activeColumns}
+                                        columnWidths={columnWidths}
+                                        accentBg10={accent.bg10}
+                                        accentText400={accent.text400}
+                                        accentBorder500={accent.border500}
+                                        accentBg30={accent.bg30}
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             </div>
 
@@ -1113,7 +1190,7 @@ const VirtualList = memo(function VirtualList({
     const slice = files.slice(startIdx, endIdx);
 
     return (
-        <motion.div {...contentMotion} className="relative" style={{height: totalH}}>
+        <div className="relative" style={{height: totalH}}>
             <div style={{height: topPad}} />
             {slice.map((file) => {
                 const isSelected = selectedPath === file.path;
@@ -1178,61 +1255,265 @@ const VirtualList = memo(function VirtualList({
                 );
             })}
             <div style={{height: Math.max(0, bottomPad)}} />
-        </motion.div>
+        </div>
     );
 });
 
-function SkeletonList({accentHex}: {accentHex: string}) {
-    const widths = [
-        'w-10/12',
-        'w-8/12',
-        'w-11/12',
-        'w-9/12',
-        'w-7/12',
-        'w-10/12',
-        'w-9/12',
-        'w-8/12',
-    ];
+const SKELETON_ROWS_COUNT = 14;
+
+const TITLE_WIDTHS = [
+    'w-[74%]',
+    'w-[58%]',
+    'w-[84%]',
+    'w-[66%]',
+    'w-[80%]',
+    'w-[54%]',
+    'w-[72%]',
+    'w-[62%]',
+];
+
+const ARTIST_WIDTHS = [
+    'w-[68%]',
+    'w-[50%]',
+    'w-[78%]',
+    'w-[58%]',
+    'w-[72%]',
+    'w-[46%]',
+];
+
+const ALBUM_WIDTHS = [
+    'w-[64%]',
+    'w-[78%]',
+    'w-[48%]',
+    'w-[70%]',
+];
+
+function ShimmerBar({
+    className,
+    accentHex,
+    delay = 0,
+    alpha = '24',
+}: {
+    className: string;
+    accentHex: string;
+    delay?: number;
+    alpha?: string;
+}) {
     return (
-        <motion.div
-            initial="hidden"
-            animate="show"
-            variants={{
-                hidden: {},
-                show: {transition: {staggerChildren: 0.04}},
-            }}
-        >
-            {widths.map((w, i) => (
-                <motion.div
-                    key={i}
-                    variants={{
-                        hidden: {opacity: 0, y: 8},
-                        show: {opacity: 1, y: 0},
-                    }}
-                    transition={{duration: 0.25, ease: 'easeInOut'}}
-                    className="flex items-center gap-2.5 px-3 py-2 border-l-2 border-transparent"
+        <div className={`relative overflow-hidden ${className}`}>
+            <span
+                suppressHydrationWarning
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    background: `linear-gradient(90deg, transparent, ${accentHex}${alpha}, transparent)`,
+                    animation: 'skeleton-shimmer-h 1.8s ease-in-out infinite',
+                    animationDelay: `${delay}s`,
+                }}
+            />
+        </div>
+    );
+}
+
+function renderSkeletonCell(
+    colKey: string,
+    width: number,
+    rowIdx: number,
+    accentHex: string,
+) {
+    const colStyle = { width, minWidth: width, maxWidth: width };
+    const baseDelay = (rowIdx % 6) * 0.12;
+
+    switch (colKey) {
+        case 'name':
+            return (
+                <div
+                    key="name"
+                    style={colStyle}
+                    className="shrink-0 flex items-center gap-2 min-w-0 pr-1 overflow-hidden"
                 >
-                    <span className="shrink-0 w-3 h-3 rounded-sm bg-zinc-800/70" />
-                    <span
-                        className={`relative overflow-hidden h-3 rounded ${w} bg-zinc-800/70`}
-                    >
-                        <motion.span
-                            className="absolute inset-x-0 -top-1/2 h-1/2"
-                            style={{
-                                background: `linear-gradient(0deg, transparent, ${accentHex}33, transparent)`,
-                            }}
-                            animate={{y: ['0%', '300%']}}
-                            transition={{
-                                duration: 1.4,
-                                repeat: Infinity,
-                                ease: 'easeInOut',
-                                delay: i * 0.08,
-                            }}
-                        />
-                    </span>
-                </motion.div>
+                    <ShimmerBar
+                        className="shrink-0 w-3.5 h-3.5 rounded-sm bg-zinc-800/80"
+                        accentHex={accentHex}
+                        delay={baseDelay}
+                        alpha="28"
+                    />
+                    <ShimmerBar
+                        className={`h-3 rounded-xs bg-zinc-800/70 ${TITLE_WIDTHS[rowIdx % TITLE_WIDTHS.length]}`}
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.04}
+                        alpha="28"
+                    />
+                </div>
+            );
+        case 'artist':
+            return (
+                <div
+                    key="artist"
+                    style={colStyle}
+                    className="shrink-0 flex items-center px-1 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className={`h-2.5 rounded-xs bg-zinc-800/60 ${ARTIST_WIDTHS[rowIdx % ARTIST_WIDTHS.length]}`}
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.08}
+                        alpha="22"
+                    />
+                </div>
+            );
+        case 'album':
+            return (
+                <div
+                    key="album"
+                    style={colStyle}
+                    className="shrink-0 flex items-center px-1 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className={`h-2.5 rounded-xs bg-zinc-800/50 ${ALBUM_WIDTHS[rowIdx % ALBUM_WIDTHS.length]}`}
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.12}
+                        alpha="1e"
+                    />
+                </div>
+            );
+        case 'track':
+            return (
+                <div
+                    key="track"
+                    style={colStyle}
+                    className="shrink-0 flex items-center justify-center px-0.5 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-2.5 w-4 rounded-xs bg-zinc-800/50"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.14}
+                        alpha="1e"
+                    />
+                </div>
+            );
+        case 'year':
+            return (
+                <div
+                    key="year"
+                    style={colStyle}
+                    className="shrink-0 flex items-center justify-center px-0.5 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-2.5 w-7 rounded-xs bg-zinc-800/50"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.16}
+                        alpha="1e"
+                    />
+                </div>
+            );
+        case 'genre':
+            return (
+                <div
+                    key="genre"
+                    style={colStyle}
+                    className="shrink-0 flex items-center px-1 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-2.5 w-12 rounded-xs bg-zinc-800/50"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.18}
+                        alpha="1e"
+                    />
+                </div>
+            );
+        case 'duration':
+            return (
+                <div
+                    key="duration"
+                    style={colStyle}
+                    className="shrink-0 flex items-center justify-end px-1 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-2.5 w-8 rounded-xs bg-zinc-800/60 mr-0.5"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.2}
+                        alpha="22"
+                    />
+                </div>
+            );
+        case 'ext':
+            return (
+                <div
+                    key="ext"
+                    style={colStyle}
+                    className="shrink-0 flex items-center justify-center overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-3.5 w-7 rounded bg-zinc-850/80 border border-zinc-800/50"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.22}
+                        alpha="24"
+                    />
+                </div>
+            );
+        case 'size':
+            return (
+                <div
+                    key="size"
+                    style={colStyle}
+                    className="shrink-0 flex items-center justify-end px-1 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-2.5 w-10 rounded-xs bg-zinc-800/60 mr-0.5"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.24}
+                        alpha="20"
+                    />
+                </div>
+            );
+        case 'mtime':
+        case 'ctime':
+            return (
+                <div
+                    key={colKey}
+                    style={colStyle}
+                    className="shrink-0 flex items-center justify-end px-1 overflow-hidden"
+                >
+                    <ShimmerBar
+                        className="h-2.5 w-16 rounded-xs bg-zinc-800/50 mr-0.5"
+                        accentHex={accentHex}
+                        delay={baseDelay + 0.26}
+                        alpha="1e"
+                    />
+                </div>
+            );
+        default:
+            return <div key={colKey} style={colStyle} className="shrink-0 px-1" />;
+    }
+}
+
+function SkeletonList({
+    activeColumns,
+    columnWidths,
+    accentHex,
+}: {
+    activeColumns: string[];
+    columnWidths: Record<string, number>;
+    accentHex: string;
+}) {
+    return (
+        <div className="flex flex-col w-full select-none pointer-events-none">
+            {Array.from({ length: SKELETON_ROWS_COUNT }).map((_, i) => (
+                <div
+                    key={i}
+                    className="w-full flex items-center px-3 border-b border-zinc-900/40 gap-1 border-l-2 border-transparent"
+                    style={{ height: ROW_HEIGHT }}
+                >
+                    {activeColumns.map((colKey) =>
+                        renderSkeletonCell(
+                            colKey,
+                            columnWidths[colKey] ?? DEFAULT_COLUMN_WIDTHS[colKey] ?? 80,
+                            i,
+                            accentHex,
+                        ),
+                    )}
+                </div>
             ))}
-        </motion.div>
+        </div>
     );
 }
 

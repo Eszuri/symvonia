@@ -14,6 +14,30 @@ export const contentMotion = {
     transition: contentTransition,
 };
 
+/** Directional folder navigation animation (drill-in & drill-out). */
+export const folderNavVariants = {
+    initial: (direction: 'forward' | 'backward') => ({
+        opacity: 0,
+        x: direction === 'forward' ? 24 : -24,
+    }),
+    animate: {
+        opacity: 1,
+        x: 0,
+        transition: {
+            duration: 0.2,
+            ease: [0.25, 1, 0.5, 1],
+        },
+    },
+    exit: (direction: 'forward' | 'backward') => ({
+        opacity: 0,
+        x: direction === 'forward' ? -24 : 24,
+        transition: {
+            duration: 0.14,
+            ease: [0.4, 0, 1, 1],
+        },
+    }),
+};
+
 /** Shared modal backdrop fade animation. */
 export const backdropMotion = {
     initial: {opacity: 0},
