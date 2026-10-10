@@ -297,7 +297,8 @@ export default function StreamingModal({lang, open, onClose}: StreamingModalProp
         try {
             const {invoke} = await import('@tauri-apps/api/core');
             await invoke('open_webview_stream', {url, label, title});
-        } catch {
+        } catch (err) {
+            console.error('[Symvonia] Error opening webview stream:', err);
             window.open(url, '_blank');
         }
     }, []);

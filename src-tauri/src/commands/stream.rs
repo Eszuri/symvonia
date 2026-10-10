@@ -56,6 +56,70 @@ fn is_media_url(url: &str) -> bool {
     false
 }
 
+const YOUTUBE_ADBLOCK_SCRIPT: &str = r#"
+(function() {
+    function injectAdblockStyle() {
+        if (!document.head && !document.documentElement) return;
+        if (document.getElementById('symvonia-adblock-style')) return;
+        const style = document.createElement('style');
+        style.id = 'symvonia-adblock-style';
+        style.textContent = `
+            .video-ads, .ytp-ad-module, .ytp-ad-overlay-container,
+            ytd-promoted-video-renderer, ytd-compact-promoted-video-renderer,
+            ytd-promoted-sparkles-web-renderer, ytd-banner-promo-renderer,
+            ytd-in-feed-ad-layout-renderer, ytd-ad-slot-renderer,
+            #player-ads, #masthead-ad, .ytp-ad-message-container,
+            tp-yt-paper-dialog:has(#feedback),
+            ytd-enforcement-message-view-model,
+            .yt-badge-shape--ad, ad-badge-view-model {
+                display: none !important;
+            }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    function autoSkipAds() {
+        injectAdblockStyle();
+        const video = document.querySelector('video');
+        const adShowing = document.querySelector('.ad-showing, .ad-interrupting');
+        if (video && adShowing) {
+            video.muted = true;
+            video.playbackRate = 16.0;
+            if (isFinite(video.duration) && video.duration > 0) {
+                video.currentTime = video.duration;
+            }
+        }
+
+        const skipButtons = [
+            '.ytp-ad-skip-button',
+            '.ytp-ad-skip-button-modern',
+            '.ytp-skip-ad-button',
+            '.ytp-ad-skip-button-text',
+            '.ytp-ad-overlay-close-button',
+            'button.ytp-ad-skip-button'
+        ];
+        for (const selector of skipButtons) {
+            const btn = document.querySelector(selector);
+            if (btn) {
+                btn.click();
+            }
+        }
+
+        const antiAdblockModal = document.querySelector('ytd-enforcement-message-view-model');
+        if (antiAdblockModal) {
+            antiAdblockModal.remove();
+            if (video && video.paused) {
+                video.play();
+            }
+        }
+    }
+
+    injectAdblockStyle();
+    setInterval(autoSkipAds, 250);
+    document.addEventListener('DOMContentLoaded', injectAdblockStyle);
+})();
+"#;
+
 #[tauri::command]
 pub async fn open_webview_stream(
     app: AppHandle,
@@ -75,7 +139,7 @@ pub async fn open_webview_stream(
         return Ok(());
     }
 
-    let _window = WebviewWindowBuilder::new(
+    let builder = WebviewWindowBuilder::new(
         &app,
         &label,
         WebviewUrl::External(parsed),
@@ -83,8 +147,12 @@ pub async fn open_webview_stream(
     .title(&title)
     .inner_size(1200.0, 800.0)
     .min_inner_size(800.0, 600.0)
-    .build()
-    .map_err(|e| e.to_string())?;
+    .devtools(true)
+    .initialization_script(YOUTUBE_ADBLOCK_SCRIPT);
+
+    let _window = builder
+        .build()
+        .map_err(|e| e.to_string())?;
 
     let app_clone = app.clone();
     let label_clone = label.clone();
