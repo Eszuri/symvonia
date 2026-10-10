@@ -442,6 +442,7 @@ function FolderExplorer({
     useEffect(() => {
         if (prevDisplayPathRef.current !== displayPath) {
             const prev = prevDisplayPathRef.current;
+            prevDisplayPathRef.current = displayPath;
             setNavDirection(determineNavDirection(displayPath, prev));
         }
     }, [displayPath]);
