@@ -71,7 +71,7 @@ Symvonia bisa memeriksa dan menginstall versi terbaru langsung dari dalam aplika
 ## Cara Penggunaan
 
 1. **Buka Symvonia** — Pilih folder musik kamu dari tombol "Pilih Folder Musik"
-2. **Putar lagu** — Klik dua kali file audio dari daftar di sidebar kiri
+2. **Putar lagu** — Klik file audio dari daftar di sidebar kiri
 3. **Streaming** (opsional) — Klik tombol **Streaming** di pojok kiri atas untuk membuka platform streaming
 4. **Nikmati** — Wallpaper desktop akan berubah otomatis mengikuti cover art
 

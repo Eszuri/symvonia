@@ -1,4 +1,24 @@
 import type {OutputMode} from '../../lib/storage';
+import type {FileEntry} from '../../components/FolderExplorer';
+
+export const normalizePath = (p?: string | null): string =>
+    p ? p.replace(/\\/g, '/').toLowerCase() : '';
+
+export const makeTempFileEntry = (filePath: string): FileEntry => {
+    const name = filePath.split(/[/\\]/).pop() || filePath;
+    const ext = name.includes('.') ? name.split('.').pop() || '' : '';
+    return {
+        name,
+        path: filePath,
+        is_dir: false,
+        ext,
+        mtime: Date.now(),
+        size: 0,
+        ctime: Date.now(),
+        display_name: name,
+        sort_key: name,
+    };
+};
 
 type PlaybackRuntimeStatus =
     | 'idle'

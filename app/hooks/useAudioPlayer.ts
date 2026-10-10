@@ -1,6 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 import type {FileEntry} from "../components/FolderExplorer";
-import type {SongMetadata} from "../components/PlayerPanel";
 import {
     fetchSessionState,
     getTauri,
@@ -16,11 +15,13 @@ import {useBitPerfectEngine, type EngineErrorEvent, type NativeOutputMode} from 
 import type {OutputMode} from "../lib/storage";
 import {useVolumeFade} from "./audio/useVolumeFade";
 import {useAudioSrc} from "./audio/useAudioSrc";
-import type {PlaybackRuntimeInfo} from "./audio/playbackTypes";
-import {listenTauri, type LibraryCacheInvalidatedEvent} from "../lib/tauri";
+import {useAudioQueue} from "./audio/useAudioQueue";
+import {useAudioWallpaper} from "./audio/useAudioWallpaper";
+import {useAudioVolume} from "./audio/useAudioVolume";
+import {normalizePath, makeTempFileEntry, type PlaybackRuntimeInfo} from "./audio/playbackTypes";
 import {isWallpaperEngineActive} from "./useWallpaperPlugin";
 
-interface UseAudioPlayerOptions {
+export interface UseAudioPlayerOptions {
     lang: Lang;
     musicFolder: string | null;
     autoWallpaper: boolean;
@@ -53,10 +54,6 @@ interface UseAudioPlayerOptions {
     onAutoFallback?: () => void;
     nativeEngineInstalled?: boolean | null;
 }
-
-const MIN_RESUME_VOLUME = 0.01;
-const normalizePath = (p?: string | null): string =>
-    p ? p.replace(/\\/g, '/').toLowerCase() : '';
 
 export function useAudioPlayer(options: UseAudioPlayerOptions) {
     const {
@@ -93,34 +90,31 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         nativeEngineInstalled = null,
     } = options;
 
+    const isMountedRef = useRef(true);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Callbacks & options refs
     const outputModeRef = useRef<OutputMode>(outputMode);
     const autoFallbackRef = useRef<boolean>(autoFallbackHtmlAudio);
-    useEffect(() => {
-        autoFallbackRef.current = autoFallbackHtmlAudio;
-    }, [autoFallbackHtmlAudio]);
-
     const onAutoFallbackRef = useRef(onAutoFallback);
-    useEffect(() => {
-        onAutoFallbackRef.current = onAutoFallback;
-    }, [onAutoFallback]);
-
     const setOutputModeCallbackRef = useRef(setOutputMode);
-    useEffect(() => {
-        setOutputModeCallbackRef.current = setOutputMode;
-    }, [setOutputMode]);
-
     const setOutputDeviceCallbackRef = useRef(setOutputDevice);
-    useEffect(() => {
-        setOutputDeviceCallbackRef.current = setOutputDevice;
-    }, [setOutputDevice]);
+    const outputDeviceRef = useRef<string | null>(outputDevice);
+    const prevOutputDeviceRef = useRef<string | null>(outputDevice);
+    const shuffleRef = useRef(shuffle);
+    const repeatRef = useRef<"off" | "all" | "one">(repeat);
 
-    const [files, setFiles] = useState<FileEntry[]>([]);
-    const [filesLoadedOnce, setFilesLoadedOnce] = useState(false);
-    const [sessionRestored, setSessionRestored] = useState(false);
-    const [loadingFiles, setLoadingFiles] = useState(false);
-    const [currentPath, setCurrentPath] = useState<string | null>(() => options.musicFolder || null);
-    const [selectedSong, setSelectedSong] = useState<FileEntry | null>(null);
-    const [metadata, setMetadata] = useState<SongMetadata | null>(null);
+    useEffect(() => {
+        outputModeRef.current = outputMode;
+        autoFallbackRef.current = autoFallbackHtmlAudio;
+        onAutoFallbackRef.current = onAutoFallback;
+        setOutputModeCallbackRef.current = setOutputMode;
+        setOutputDeviceCallbackRef.current = setOutputDevice;
+        shuffleRef.current = shuffle;
+        repeatRef.current = repeat;
+    }, [outputMode, autoFallbackHtmlAudio, onAutoFallback, setOutputMode, setOutputDevice, shuffle, repeat]);
+
+    // Core playback state
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTimeState] = useState(0);
     const currentTimeRef = useRef(0);
@@ -133,37 +127,13 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
     const [runtimeStatus, setRuntimeStatus] = useState<'idle' | 'loading' | 'starting' | 'playing' | 'paused' | 'stopping' | 'fallback' | 'error' | 'unavailable'>('idle');
     const [effectiveOutputMode, setEffectiveOutputMode] = useState<OutputMode | null>(outputMode === 'html_audio' ? 'html_audio' : null);
     const [nativeSuppressed, setNativeSuppressed] = useState(false);
-    const coverDataUrl = metadata?.cover_b64
-        ? `data:${metadata.cover_mime || 'image/jpeg'};base64,${metadata.cover_b64}`
-        : null;
+    const [sessionRestored, setSessionRestored] = useState(false);
 
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const filesRef = useRef<FileEntry[]>([]);
-    const selectedSongRef = useRef<FileEntry | null>(null);
-    const metadataRef = useRef<SongMetadata | null>(null);
-    const playlistRef = useRef<FileEntry[]>([]);
-    const volumeModeRef = useRef<"app" | "system">("app");
-    const volumeLimitRef = useRef<number>(0);
-    const autoWallpaperRef = useRef<boolean>(autoWallpaper);
-    const folderSortRef = useRef<string>("name");
-    const fileSortRef = useRef<string>("name");
-    const sortDirRef = useRef<string>("asc");
-    const nameSourceRef = useRef<string>("filename");
-    const formatsRef = useRef<string[]>(formats);
-    const shuffleRef = useRef(false);
-    const repeatRef = useRef<"off" | "all" | "one">("off");
-    const isMountedRef = useRef(true);
+    // Playback generation & tracking refs
     const playbackGenerationRef = useRef(0);
-    const metadataRequestRef = useRef(0);
-    const loadFilesTokenRef = useRef(0);
-    const libraryRootPromiseRef = useRef<Promise<void> | null>(null);
-    const autoPausedBySilenceRef = useRef(false);
     const lastSessionSaveRef = useRef(0);
     const restoredPendingPlayRef = useRef(false);
     const sessionRestoreAttemptedRef = useRef(false);
-    const playlistFolderRef = useRef<string | null>(null);
-    const skipPlaylistRebuildRef = useRef(false);
-    const outputDeviceRef = useRef<string | null>(outputDevice);
     const nativeEngineActiveRef = useRef(false);
     const nativeEngineModeRef = useRef<NativeOutputMode | null>(null);
     const activeNativeRequestRef = useRef<string | null>(null);
@@ -174,8 +144,103 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
     const bpSendCommandRef = useRef<(cmd: Record<string, unknown>) => Promise<void>>(async () => {});
     const enginePlayRef = useRef<(file: FileEntry, seekPosition?: number, generation?: number) => Promise<void>>(async () => {});
 
-    const { fadeVolumeTo, cancelFade, fadeAudioRef, fadeDurationRef } = useVolumeFade(audioRef, fadeAudio, fadeDuration);
-    const { getAudioSrc } = useAudioSrc();
+    // Sub-hook: Audio Wallpaper & Metadata
+    const wallpaperHook = useAudioWallpaper({
+        lang,
+        autoWallpaper,
+        showError,
+        selectedSongRef: {current: null}, // will be wired to queue
+        isMountedRef,
+        onDurationChange: (dur) => setDuration(dur),
+    });
+    const {
+        metadata,
+        setMetadata,
+        metadataRef,
+        metadataRequestRef,
+        coverDataUrl,
+        applyWallpaper,
+        loadMetadata,
+    } = wallpaperHook;
+
+    // Sub-hook: Audio Queue & Playlist
+    const queue = useAudioQueue({
+        musicFolder,
+        folderSort,
+        fileSort,
+        sortDir,
+        nameSource,
+        formats,
+        showError,
+        isMountedRef,
+        onSongSelectedSync: (filePath) => loadMetadata(filePath, true),
+        onSongSelectedMissing: () => setMetadata(null),
+    });
+    const {
+        files,
+        setFiles,
+        filesRef,
+        filesLoadedOnce,
+        loadingFiles,
+        currentPath,
+        setCurrentPath,
+        selectedSong,
+        setSelectedSong,
+        selectedSongRef,
+        playlistRef,
+        playlistFolderRef,
+        loadFilesTokenRef,
+        listFiles,
+        refreshFiles,
+        goUp,
+        syncSongPlaylist,
+        getNextSong,
+        getPrevSong,
+    } = queue;
+
+    // Wire selectedSongRef to wallpaperHook's internal lookup
+    const prevAutoWallpaperRef = useRef(autoWallpaper);
+    useEffect(() => {
+        const prev = prevAutoWallpaperRef.current;
+        prevAutoWallpaperRef.current = autoWallpaper;
+        if (prev !== autoWallpaper && autoWallpaper && isBrowserTauri()) {
+            if (metadataRef.current) {
+                applyWallpaper(metadataRef.current).catch(() => {});
+            } else if (selectedSongRef.current) {
+                loadMetadata(selectedSongRef.current.path, false).catch(() => {});
+            }
+        }
+    }, [autoWallpaper, applyWallpaper, loadMetadata, metadataRef, selectedSongRef]);
+
+    // Sub-hook: Audio Volume & Mute
+    const volume = useAudioVolume({
+        volumeMode,
+        appVolume,
+        systemVolume,
+        setAppVolume,
+        setSystemVolume,
+        volumeLimit,
+        systemMuted,
+        setSystemMuted,
+        lastLocalVolumeSetRef,
+        pauseIfMuted,
+        isPlaying,
+        setIsPlaying,
+        audioRef,
+    });
+    const {
+        activeVolume,
+        volumeModeRef,
+        autoPausedBySilenceRef,
+        isVolumeSilent,
+        setMinimumResumeVolume,
+        handleVolumeChange,
+        toggleSystemMute,
+    } = volume;
+
+    // Sub-hook: Audio Effects & DSP
+    const {fadeVolumeTo, cancelFade, fadeAudioRef, fadeDurationRef} = useVolumeFade(audioRef, fadeAudio, fadeDuration);
+    const {getAudioSrc} = useAudioSrc();
     const equalizer = useEqualizer();
     const {
         gain: gainBoostValue,
@@ -186,50 +251,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         prepareAudio,
     } = useGainBoost(audioRef, equalizer);
 
-    const currentPathRef = useRef<string | null>(currentPath);
-    useEffect(() => {
-        currentPathRef.current = currentPath;
-        outputModeRef.current = outputMode;
-    }, [currentPath, outputMode]);
-
-    const makeTempFileEntry = (filePath: string): FileEntry => {
-        const name = filePath.split(/[/\\]/).pop() || filePath;
-        const ext = name.includes('.') ? name.split('.').pop() || '' : '';
-        return {
-            name,
-            path: filePath,
-            is_dir: false,
-            ext,
-            mtime: Date.now(),
-            size: 0,
-            ctime: Date.now(),
-            display_name: name,
-            sort_key: name,
-        };
-    };
-
-
-
-
-
-    useEffect(() => {
-        filesRef.current = files;
-        selectedSongRef.current = selectedSong;
-        metadataRef.current = metadata;
-        autoWallpaperRef.current = autoWallpaper;
-        formatsRef.current = formats;
-        volumeModeRef.current = volumeMode;
-        volumeLimitRef.current = volumeLimit;
-        folderSortRef.current = folderSort;
-        fileSortRef.current = fileSort;
-        sortDirRef.current = sortDir;
-        nameSourceRef.current = nameSource;
-        shuffleRef.current = shuffle;
-        repeatRef.current = repeat;
-        outputDeviceRef.current = outputDevice;
-    }, [files, selectedSong, metadata, autoWallpaper, formats, volumeMode, volumeLimit, folderSort, fileSort, sortDir, nameSource, shuffle, repeat, outputDevice]);
-
-    const prevOutputDeviceRef = useRef<string | null>(outputDevice);
+    // On-the-fly Output Device Switching
     useEffect(() => {
         const prev = prevOutputDeviceRef.current;
         outputDeviceRef.current = outputDevice;
@@ -244,324 +266,21 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
                 enginePlayRef.current(currentSong, curPos, gen).then(() => {
                     if (!wasPlaying) {
-                        bpSendCommandRef.current({ command: "pause" }).catch(() => {});
+                        bpSendCommandRef.current({command: "pause"}).catch(() => {});
                     }
                 }).catch((err) => {
                     console.error("[Symvonia] Failed to switch output device on the fly:", err);
                 });
             } else if (audioRef.current && 'setSinkId' in audioRef.current) {
-                const el = audioRef.current as HTMLMediaElement & { setSinkId?: (id: string) => Promise<void> };
+                const el = audioRef.current as HTMLMediaElement & {setSinkId?: (id: string) => Promise<void>};
                 if (typeof el.setSinkId === 'function') {
                     el.setSinkId(outputDevice || "").catch(() => {});
                 }
             }
         }
-    }, [outputDevice, isPlaying, runtimeStatus]);
+    }, [outputDevice, isPlaying, runtimeStatus, selectedSongRef]);
 
-    const activeVolume = volumeMode === "system" ? systemVolume : appVolume;
-
-    const isVolumeSilent = useCallback(() => {
-        return volumeMode === "app"
-            ? appVolume <= 0
-            : systemMuted || systemVolume <= 0;
-    }, [appVolume, systemMuted, systemVolume, volumeMode]);
-
-    const setMinimumResumeVolume = useCallback(async () => {
-        if (volumeMode === "app") {
-            setAppVolume(MIN_RESUME_VOLUME);
-            if (audioRef.current) audioRef.current.volume = MIN_RESUME_VOLUME;
-            return MIN_RESUME_VOLUME;
-        }
-
-        const targetPct = 1;
-        const targetVolume = targetPct / 100;
-        setSystemVolume(targetVolume);
-        setSystemMuted(false);
-        lastLocalVolumeSetRef.current = Date.now();
-
-        if (!isBrowserTauri()) return targetVolume;
-
-        try {
-            const mod = await getTauri();
-            await mod.invoke("set_system_volume", {value: targetPct});
-            await mod.invoke("set_system_mute", {mute: false});
-        } catch {
-            // Keep local playback responsive even if the OS volume call fails.
-        }
-        return targetVolume;
-    }, [
-        lastLocalVolumeSetRef,
-        setAppVolume,
-        setSystemMuted,
-        setSystemVolume,
-        volumeMode,
-    ]);
-
-    /** Apply wallpaper from current metadata*/
-    const applyWallpaper = useCallback(
-        async (meta: SongMetadata, token?: number) => {
-            const isEngineActive = isWallpaperEngineActive();
-            const shouldApplyToSystem = autoWallpaperRef.current;
-            if (!isBrowserTauri() || (!shouldApplyToSystem && !isEngineActive)) return;
-            try {
-                const mod = await getTauri();
-                if (token !== undefined && token !== metadataRequestRef.current) return;
-                if (meta.cover_b64) {
-                    await mod.invoke("set_wallpaper", {
-                        coverB64: meta.cover_b64,
-                        applyToSystem: shouldApplyToSystem,
-                    });
-                } else {
-                    await mod.invoke("clear_wallpaper", {
-                        applyToSystem: shouldApplyToSystem,
-                    });
-                }
-            } catch (e) {
-                showError(t(lang, 'log.wallpaperError', {msg: String(e)}));
-            }
-        },
-        [showError, lang],
-    );
-
-    // ─── file listing ──────────────────────────────────────────────────────────
-
-    const listFiles = useCallback(async (dirPath: string): Promise<FileEntry[]> => {
-        await libraryRootPromiseRef.current;
-        const mod = await getTauri();
-        return mod.invoke<FileEntry[]>("list_files", {
-            path: dirPath,
-            folderSort: folderSortRef.current || "name",
-            fileSort: fileSortRef.current || "name",
-            sortDir: sortDirRef.current || "asc",
-            nameSource: nameSourceRef.current || "filename",
-            formats: formatsRef.current && formatsRef.current.length > 0
-                ? formatsRef.current
-                : ['mp3', 'flac', 'ogg', 'wav', 'm4a', 'wma'],
-        });
-    }, []);
-
-    const loadFiles = useCallback(
-        async (dirPath: string) => {
-            const token = ++loadFilesTokenRef.current;
-            setLoadingFiles(true);
-            try {
-                const result = await listFiles(dirPath);
-                if (token !== loadFilesTokenRef.current) return;
-                setFiles(result || []);
-                setSelectedSong((prev) => {
-                    if (!prev) return null;
-                    const updated = (result || []).find((f) => f.path === prev.path);
-                    return updated || prev;
-                });
-            } catch (e) {
-                if (token !== loadFilesTokenRef.current) return;
-                console.error("[Symvonia] Failed to list files in:", dirPath, e);
-                showError(String(e));
-                setFiles([]);
-            } finally {
-                if (token === loadFilesTokenRef.current) {
-                    setLoadingFiles(false);
-                    setFilesLoadedOnce(true);
-                }
-            }
-        },
-        [listFiles, showError],
-    );
-
-    const refreshFiles = useCallback(() => {
-        if (!currentPath) return;
-        if (isBrowserTauri()) {
-            getTauri()
-                .then((mod) => mod.invoke("invalidate_library_directory", {path: currentPath}))
-                .catch(() => {})
-                .finally(() => loadFiles(currentPath));
-            return;
-        }
-        loadFiles(currentPath);
-    }, [currentPath, loadFiles]);
-
-    // ─── metadata ──────────────────────────────────────────────────────────────
-
-    const loadMetadata = useCallback(
-        async (filePath: string, skipWallpaper = false) => {
-            const token = ++metadataRequestRef.current;
-            try {
-                const mod = await getTauri();
-                const result = await mod.invoke<SongMetadata>("get_metadata", {
-                    filePath,
-                });
-                if (token !== metadataRequestRef.current || !isMountedRef.current) return;
-                setMetadata(result);
-                if (result.duration) setDuration(result.duration);
-                // Fire-and-forget — wallpaper update must never block metadata state update
-                if (!skipWallpaper) applyWallpaper(result, token).catch(() => {});
-            } catch {
-                if (token !== metadataRequestRef.current || !isMountedRef.current) return;
-                setMetadata(null);
-            }
-        },
-        [applyWallpaper],
-    );
-
-    // ─── Reactive wallpaper synchronization on autoWallpaper toggle ─────────────
-    const prevAutoWallpaperRef = useRef<boolean>(autoWallpaper);
-    useEffect(() => {
-        const prev = prevAutoWallpaperRef.current;
-        prevAutoWallpaperRef.current = autoWallpaper;
-        autoWallpaperRef.current = autoWallpaper;
-
-        if (prev !== autoWallpaper) {
-            if (!isBrowserTauri()) return;
-            if (autoWallpaper) {
-                // When toggled ON: immediately set wallpaper from current metadata if present,
-                // or load metadata for currently selected song.
-                if (metadataRef.current) {
-                    applyWallpaper(metadataRef.current).catch(() => {});
-                } else if (selectedSongRef.current) {
-                    loadMetadata(selectedSongRef.current.path, false).catch(() => {});
-                }
-            }
-            // When toggled OFF: do nothing, leave current wallpaper as is
-        }
-    }, [autoWallpaper, applyWallpaper, loadMetadata]);
-
-    const syncSongPlaylist = useCallback(async (filePath: string) => {
-        const songParent = filePath.replace(/[/\\][^/\\]+$/, "");
-        try {
-            let fileList = filesRef.current;
-            if (currentPathRef.current !== songParent || fileList.length === 0) {
-                if (isBrowserTauri()) {
-                    fileList = await listFiles(songParent);
-                    if (isMountedRef.current) {
-                        setFiles(fileList);
-                        setCurrentPath(songParent);
-                    }
-                }
-            }
-            const songFile = fileList.find((f) => !f.is_dir && f.path === filePath);
-            const targetSong = songFile || makeTempFileEntry(filePath);
-            if (isMountedRef.current) {
-                setSelectedSong(targetSong);
-                loadMetadata(filePath, true);
-            }
-            playlistRef.current = fileList.filter((f) => !f.is_dir);
-            playlistFolderRef.current = songParent;
-        } catch {
-            const tempFile = makeTempFileEntry(filePath);
-            if (isMountedRef.current) {
-                setSelectedSong(tempFile);
-                loadMetadata(filePath, true);
-            }
-        }
-    }, [listFiles, loadMetadata]);
-
-    // ─── path / folder effects ─────────────────────────────────────────────────
-
-    useEffect(() => {
-        if (!isBrowserTauri()) {
-            libraryRootPromiseRef.current = null;
-            return;
-        }
-        const previous = libraryRootPromiseRef.current ?? Promise.resolve();
-        const promise = previous
-            .catch(() => {})
-            .then(() => getTauri())
-            .then((mod) => mod.invoke("set_library_root", {path: musicFolder}))
-            .then(() => undefined);
-        libraryRootPromiseRef.current = promise;
-        promise.catch((error) => console.error("[Symvonia] Failed to set library root:", error));
-    }, [musicFolder]);
-
-    useEffect(() => {
-        const frame = requestAnimationFrame(() => {
-            if (musicFolder) {
-                setCurrentPath((prev) => {
-                    const normalizedPrev = prev ? normalizePath(prev) : "";
-                    const normalizedRoot = normalizePath(musicFolder);
-                    if (!normalizedPrev || (normalizedPrev !== normalizedRoot && !normalizedPrev.startsWith(`${normalizedRoot}/`))) {
-                        return musicFolder;
-                    }
-                    return prev;
-                });
-            } else {
-                setCurrentPath(null);
-            }
-        });
-        return () => cancelAnimationFrame(frame);
-    }, [musicFolder]);
-
-    useEffect(() => {
-        if (!isBrowserTauri()) return;
-        let disposed = false;
-        let unlisten: (() => void) | null = null;
-        void listenTauri<LibraryCacheInvalidatedEvent>("library-cache-invalidated", (event) => {
-            if (disposed || !musicFolder) return;
-            if (normalizePath(event.root_path) !== normalizePath(musicFolder)) return;
-            const affected = event.affected_paths.map(normalizePath);
-            const current = currentPathRef.current ? normalizePath(currentPathRef.current) : "";
-            const playlistFolder = playlistFolderRef.current ? normalizePath(playlistFolderRef.current) : "";
-            const isAffected = (path: string) => affected.includes(path);
-            const currentAffected = Boolean(current) && isAffected(current);
-            const playlistAffected = Boolean(playlistFolder) && isAffected(playlistFolder);
-            if (currentAffected) void loadFiles(currentPathRef.current!);
-            if (playlistAffected && playlistFolderRef.current) {
-                void listFiles(playlistFolderRef.current).then((result) => {
-                    if (!isMountedRef.current) return;
-                    playlistRef.current = result.filter((file) => !file.is_dir);
-                    const selected = selectedSongRef.current;
-                    if (selected && !playlistRef.current.some((file) => file.path === selected.path)) {
-                        selectedSongRef.current = null;
-                        setSelectedSong(null);
-                        setMetadata(null);
-                    }
-                }).catch(() => {});
-            }
-        }).then((cleanup) => {
-            if (disposed) cleanup();
-            else unlisten = cleanup;
-        }).catch(() => {});
-        return () => {
-            disposed = true;
-            unlisten?.();
-        };
-    }, [listFiles, loadFiles, musicFolder]);
-
-    useEffect(() => {
-        const timer = window.setTimeout(() => {
-            if (currentPath) {
-                void loadFiles(currentPath);
-            } else {
-                setFiles([]);
-                setFilesLoadedOnce(true);
-            }
-        }, 0);
-        return () => window.clearTimeout(timer);
-    }, [currentPath, loadFiles]);
-
-    useEffect(() => {
-        const timer = window.setTimeout(() => {
-            if (currentPath) void loadFiles(currentPath);
-        }, 0);
-        return () => window.clearTimeout(timer);
-    }, [currentPath, folderSort, fileSort, sortDir, nameSource, formats, loadFiles]);
-
-    useEffect(() => {
-        skipPlaylistRebuildRef.current = true;
-    }, [folderSort, nameSource]);
-
-    useEffect(() => {
-        if (skipPlaylistRebuildRef.current) {
-            skipPlaylistRebuildRef.current = false;
-            return;
-        }
-        if (!playlistFolderRef.current) return;
-        if (currentPath !== playlistFolderRef.current) return;
-        const freshFiles = files.filter((f) => !f.is_dir);
-        playlistRef.current = freshFiles;
-    }, [currentPath, files]);
-
-    // ─── session restore ───────────────────────────────────────────────────────
-
+    // Session restore implementation
     useEffect(() => {
         if (!filesLoadedOnce) return;
         if (outputMode !== 'html_audio' && nativeEngineInstalled === null) return;
@@ -582,11 +301,11 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             if (!isMountedRef.current) return;
             if (!session) {
                 sessionRestoreAttemptedRef.current = true;
-                if (isBrowserTauri() && (autoWallpaperRef.current || isWallpaperEngineActive())) {
+                if (isBrowserTauri() && (autoWallpaper || isWallpaperEngineActive())) {
                     getTauri()
                         .then(mod =>
                             mod.invoke("clear_wallpaper", {
-                                applyToSystem: autoWallpaperRef.current,
+                                applyToSystem: autoWallpaper,
                             })
                         )
                         .catch(() => {});
@@ -658,8 +377,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                     audio.addEventListener("canplay", onCanPlay);
                     audio.load();
                 } else {
-                    // Keep the browser element empty while native capability is resolving.
-                    // Native playback starts from the restored position on the first resume.
                     audio.pause();
                     audio.removeAttribute("src");
                     audio.load();
@@ -682,7 +399,31 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 saveSessionState(null);
             }
         }
-    }, [files, filesLoadedOnce, getAudioSrc, listFiles, nativeEngineInstalled, outputMode]);
+    }, [
+        addLog,
+        appVolume,
+        autoWallpaper,
+        currentPath,
+        files,
+        filesLoadedOnce,
+        getAudioSrc,
+        lang,
+        listFiles,
+        loadFilesTokenRef,
+        loadMetadata,
+        loadingFiles,
+        nativeEngineInstalled,
+        outputMode,
+        playlistFolderRef,
+        playlistRef,
+        selectedSongRef,
+        setCurrentPath,
+        setCurrentTime,
+        setFiles,
+        setSelectedSong,
+        sessionRestored,
+        volumeModeRef,
+    ]);
 
     const nativeRestoreStartedRef = useRef(false);
     const previousRequestedModeRef = useRef<OutputMode>(outputMode);
@@ -747,13 +488,20 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 })
                 .catch(() => {});
         }
-    }, [cancelFade, nativeEngineInstalled, setCurrentTime]);
+    }, [
+        autoPausedBySilenceRef,
+        cancelFade,
+        metadataRequestRef,
+        nativeEngineInstalled,
+        playlistFolderRef,
+        playlistRef,
+        setCurrentTime,
+        setMetadata,
+        setSelectedSong,
+    ]);
 
     const clearInvalidNativeDevice = useCallback((error: EngineErrorEvent) => {
         if (!/audio device not found/i.test(error.message)) return;
-        // A friendly-name device id can become invalid after the endpoint is
-        // removed/recreated. Clear the persisted binding so the next file uses
-        // the current Windows default endpoint instead of retrying the stale id.
         outputDeviceRef.current = null;
         setOutputDeviceCallbackRef.current?.(null);
     }, []);
@@ -779,7 +527,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         playbackGenerationRef.current += 1;
         bpSendCommandRef.current({command: "stop"}).catch(() => {});
 
-        // Immediately update outputMode state & persistent config to 'html_audio'
         previousRequestedModeRef.current = 'html_audio';
         outputModeRef.current = 'html_audio';
         setOutputModeCallbackRef.current?.('html_audio');
@@ -814,10 +561,22 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             setIsPlaying(false);
             showError(t(lang, 'log.playbackFailed', {msg: finalError.message}));
         }
-    }, [addLog, appVolume, cancelFade, clearInvalidNativeDevice, getAudioSrc, lang, prepareAudio, resetPlayer, setCurrentTime, showError]);
+    }, [
+        addLog,
+        appVolume,
+        cancelFade,
+        clearInvalidNativeDevice,
+        getAudioSrc,
+        lang,
+        prepareAudio,
+        resetPlayer,
+        selectedSongRef,
+        setCurrentTime,
+        showError,
+        volumeModeRef,
+    ]);
 
-    // ─── playback ──────────────────────────────────────────────────────────────
-
+    // Playback actions
     const playSong = useCallback(
         async (file: FileEntry, startAt = 0) => {
             if (file.is_dir) return;
@@ -825,9 +584,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             const audio = audioRef.current;
             if (!audio) return;
 
-            // A failed native session is stopped asynchronously by resetPlayer.
-            // Wait for that teardown before sending the next play command so a
-            // stale WASAPI request/device cannot poison the next file.
             const pendingNativeRecovery = nativeRecoveryPromiseRef.current;
             if (pendingNativeRecovery) {
                 await pendingNativeRecovery;
@@ -862,7 +618,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                     ? (nativeEngineModeRef.current === 'exclusive' ? 'wasapi_exclusive' : 'wasapi_shared')
                     : 'html_audio'
             );
-            saveSessionState({ filePath: file.path, currentTime: Math.max(0, startAt), timestamp: Date.now() }, true);
+            saveSessionState({filePath: file.path, currentTime: Math.max(0, startAt), timestamp: Date.now()}, true);
             loadMetadata(file.path, false);
             activeNativeRequestRef.current = null;
             nativeRestoreStartedRef.current = false;
@@ -934,18 +690,33 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             }
         },
         [
-            appVolume,
-            pauseIfMuted,
-            isVolumeSilent,
-            setMinimumResumeVolume,
-            loadMetadata,
             addLog,
-            showError,
-            getAudioSrc,
+            appVolume,
+            autoPausedBySilenceRef,
+            cancelFade,
+            clearInvalidNativeDevice,
+            fadeAudioRef,
+            fadeDurationRef,
             fadeVolumeTo,
             fallbackNativeToHtml,
-            clearInvalidNativeDevice,
+            filesRef,
+            getAudioSrc,
+            isVolumeSilent,
+            lang,
+            loadMetadata,
+            metadataRef,
+            pauseIfMuted,
+            playlistFolderRef,
+            playlistRef,
+            prepareAudio,
             resetPlayer,
+            selectedSongRef,
+            setCurrentTime,
+            setMetadata,
+            setMinimumResumeVolume,
+            setSelectedSong,
+            showError,
+            volumeModeRef,
         ],
     );
 
@@ -1018,61 +789,40 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 audio.pause();
             }
         }
-    }, [pauseIfMuted, isVolumeSilent, setMinimumResumeVolume, applyWallpaper, appVolume, fadeVolumeTo, isPlaying, playSong, prepareAudio, cancelFade]);
+    }, [
+        appVolume,
+        applyWallpaper,
+        autoPausedBySilenceRef,
+        cancelFade,
+        fadeAudioRef,
+        fadeDurationRef,
+        fadeVolumeTo,
+        isPlaying,
+        isVolumeSilent,
+        metadataRef,
+        pauseIfMuted,
+        playSong,
+        prepareAudio,
+        selectedSongRef,
+        setMinimumResumeVolume,
+        volumeModeRef,
+    ]);
 
     const playNext = useCallback(() => {
-        const list = playlistRef.current;
-        if (list.length === 0) return;
-
-        let nextFile: FileEntry | undefined;
-        if (shuffleRef.current) {
-            const curPath = selectedSongRef.current?.path;
-            const candidates = list.filter((f) => f.path !== curPath);
-            nextFile =
-                candidates.length > 0
-                    ? candidates[Math.floor(Math.random() * candidates.length)]
-                    : list[0];
-        } else {
-            const idx = selectedSongRef.current
-                ? list.findIndex((f) => f.path === selectedSongRef.current!.path)
-                : -1;
-            nextFile = idx >= 0 ? list[idx + 1] : list[0];
-            if (!nextFile && repeatRef.current === "all") nextFile = list[0];
-        }
-
+        const nextFile = getNextSong(shuffleRef.current, repeatRef.current);
         if (nextFile) {
             playSong(nextFile);
         } else {
             resetPlayer();
         }
-    }, [playSong, resetPlayer]);
+    }, [getNextSong, playSong, resetPlayer]);
 
     const playPrev = useCallback(() => {
-        const list = playlistRef.current;
-        if (list.length === 0) return;
-
-        let prevFile: FileEntry | undefined;
-        if (shuffleRef.current) {
-            const curPath = selectedSongRef.current?.path;
-            const candidates = list.filter((f) => f.path !== curPath);
-            prevFile =
-                candidates.length > 0
-                    ? candidates[Math.floor(Math.random() * candidates.length)]
-                    : list[0];
-        } else {
-            const idx = selectedSongRef.current
-                ? list.findIndex((f) => f.path === selectedSongRef.current!.path)
-                : -1;
-            prevFile =
-                idx > 0
-                    ? list[idx - 1]
-                    : repeatRef.current === "all"
-                        ? list[list.length - 1]
-                        : undefined;
+        const prevFile = getPrevSong(shuffleRef.current, repeatRef.current);
+        if (prevFile) {
+            playSong(prevFile);
         }
-
-        if (prevFile) playSong(prevFile);
-    }, [playSong]);
+    }, [getPrevSong, playSong]);
 
     const playNextRef = useRef(playNext);
     const playPrevRef = useRef(playPrev);
@@ -1087,8 +837,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         togglePlayPauseRef.current = togglePlayPause;
     }, [togglePlayPause]);
 
-    // ─── native WASAPI engine ───────────────────────────────────────────────────
-
+    // Native WASAPI Engine Setup
     const nativeOutputMode: NativeOutputMode | null = outputMode === "wasapi_shared"
         ? "shared"
         : outputMode === "wasapi_exclusive"
@@ -1113,7 +862,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             if (outputDeviceRef.current) cmd.deviceId = outputDeviceRef.current;
             await bpSendCommandRef.current(cmd);
         },
-        [appVolume, nativeOutputMode],
+        [appVolume, nativeOutputMode, volumeModeRef],
     );
 
     useEffect(() => {
@@ -1134,7 +883,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             }
         }
         return true;
-    }, []);
+    }, [selectedSongRef]);
 
     const bp = useBitPerfectEngine({
         onProgress: (e) => {
@@ -1241,6 +990,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
     const nativeEngineActive = nativeOutputMode !== null && bp.status?.installed === true && !nativeSuppressed;
     const getNativeState = bp.getState;
+
     useEffect(() => {
         if (nativeOutputMode === null || bp.status?.installed !== false || nativeSuppressed) return;
         const timer = window.setTimeout(() => {
@@ -1254,15 +1004,13 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         }, 0);
         return () => window.clearTimeout(timer);
     }, [bp.status?.installed, nativeOutputMode, nativeSuppressed]);
+
     useEffect(() => {
         nativeEngineActiveRef.current = nativeEngineActive;
         nativeEngineModeRef.current = nativeOutputMode;
     }, [nativeEngineActive, nativeOutputMode]);
 
     useEffect(() => {
-        // The native sidecar survives a WebView reload. Once session restore
-        // has selected the saved file, request its live state so the new UI
-        // reflects whether WASAPI is actually playing or paused.
         if (
             nativeOutputMode === null ||
             bp.status?.installed !== true ||
@@ -1271,24 +1019,17 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         ) {
             return;
         }
-        getNativeState().catch(() => {
-            // A sidecar that exited between reload and the query will be
-            // treated as stopped; the next explicit play can start it again.
-        });
-    }, [bp.status?.installed, getNativeState, nativeOutputMode, sessionRestored]);
+        getNativeState().catch(() => {});
+    }, [bp.status?.installed, getNativeState, nativeOutputMode, selectedSongRef, sessionRestored]);
 
     useEffect(() => {
         if (previousRequestedModeRef.current === outputMode) return;
         previousRequestedModeRef.current = outputMode;
 
-        // If this is the initial config load before session restore, just sync the ref
         if (!sessionRestoreAttemptedRef.current) {
             return;
         }
 
-        // A confirmed mode change may already have called resetPlayer before
-        // updating the requested mode. Avoid sending duplicate stop commands
-        // when there is no stream/song left to tear down.
         const hasActivePlayback = Boolean(
             selectedSongRef.current ||
             audioRef.current?.src ||
@@ -1300,7 +1041,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             return;
         }
 
-        // When switching output mode: ALWAYS stop playback completely in native engine & HTML audio
         bpSendCommandRef.current({command: "stop"}).catch(() => {});
         if (isBrowserTauri()) {
             getTauri().then((m) => m.invoke("stop_audio_engine")).catch(() => {});
@@ -1331,9 +1071,18 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         playlistRef.current = [];
         playlistFolderRef.current = null;
         saveSessionState(null, true);
-    }, [outputMode, setCurrentTime]);
+    }, [
+        metadataRef,
+        metadataRequestRef,
+        outputMode,
+        playlistFolderRef,
+        playlistRef,
+        selectedSongRef,
+        setCurrentTime,
+        setMetadata,
+        setSelectedSong,
+    ]);
 
-    // Keep native engine volume in sync with the app volume slider.
     useEffect(() => {
         if (!nativeEngineActiveRef.current) return;
         bpSendCommandRef.current({
@@ -1342,8 +1091,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         }).catch(() => {});
     }, [volumeMode, appVolume]);
 
-    // ─── audio element lifecycle ───────────────────────────────────────────────
-
+    // HTML Audio Element Lifecycle
     useEffect(() => {
         isMountedRef.current = true;
         const audio = new Audio();
@@ -1377,7 +1125,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             if (!isHtmlPlaybackActive()) return;
             const t = audio.currentTime;
             setCurrentTime(t);
-            if (!audio.paused && !isPlaying) {
+            if (!audio.paused) {
                 setIsPlaying(true);
                 setRuntimeStatus('playing');
             }
@@ -1422,11 +1170,12 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             audio.src = "";
             audioRef.current = null;
         };
-    }, []);
+    }, [appVolume, selectedSongRef, setCurrentTime, volumeModeRef]);
 
+    // Session Flush on Window Unload
     useEffect(() => {
         const flush = () => {
-            if ((window as unknown as { __symvoniaResetInProgress?: boolean }).__symvoniaResetInProgress) return;
+            if ((window as unknown as {__symvoniaResetInProgress?: boolean}).__symvoniaResetInProgress) return;
             const song = selectedSongRef.current;
             const curTime = nativeEngineActiveRef.current ? currentTimeRef.current : audioRef.current?.currentTime;
             if (song && curTime && curTime > 0) {
@@ -1444,95 +1193,11 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             window.removeEventListener("beforeunload", flush);
             window.removeEventListener("pagehide", flush);
         };
-    }, []);
-
-    // ─── volume / mute sync ────────────────────────────────────────────────────
-
-    useEffect(() => {
-        if (!audioRef.current) return;
-        if (volumeMode === "app") {
-            audioRef.current.volume = Math.max(0, Math.min(1, appVolume));
-        } else {
-            audioRef.current.volume = 1;
-        }
-    }, [volumeMode, appVolume]);
-
-    useEffect(() => {
-        if (!pauseIfMuted || !isPlaying) return;
-        const isZero =
-            volumeMode === "app" ? appVolume <= 0 : systemMuted || systemVolume <= 0;
-        if (isZero && audioRef.current) {
-            autoPausedBySilenceRef.current = true;
-            audioRef.current.pause();
-            setIsPlaying(false);
-        }
-    }, [
-        pauseIfMuted,
-        volumeMode,
-        appVolume,
-        systemVolume,
-        systemMuted,
-        isPlaying,
-    ]);
-
-    useEffect(() => {
-        if (!pauseIfMuted || !autoPausedBySilenceRef.current) return;
-        const audio = audioRef.current;
-        if (!audio || !audio.src || !audio.paused) return;
-        const stillSilent =
-            volumeMode === "app" ? appVolume <= 0 : systemMuted || systemVolume <= 0;
-        if (stillSilent) return;
-        autoPausedBySilenceRef.current = false;
-        audio.play().catch(() => {
-            autoPausedBySilenceRef.current = true;
-        });
-    }, [pauseIfMuted, volumeMode, appVolume, systemVolume, systemMuted]);
-
-    useEffect(() => {
-        if (!pauseIfMuted) autoPausedBySilenceRef.current = false;
-    }, [pauseIfMuted]);
+    }, [selectedSongRef]);
 
     useEffect(() => {
         if (audioRef.current) audioRef.current.loop = repeat === "one";
     }, [repeat]);
-
-    // ─── controls ──────────────────────────────────────────────────────────────
-
-    const handleVolumeChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            const parsed = parseFloat(e.target.value);
-            if (!Number.isFinite(parsed)) return;
-            const v = Math.max(0, Math.min(1, parsed));
-            if (volumeModeRef.current === "app") {
-                setAppVolume(v);
-                if (audioRef.current) audioRef.current.volume = v;
-            } else {
-                const targetPct = Math.round(v * 100);
-                if (volumeLimit > 0 && targetPct > volumeLimit) return;
-                setSystemVolume(v);
-                setSystemMuted(targetPct === 0);
-                lastLocalVolumeSetRef.current = Date.now();
-                if (isBrowserTauri()) {
-                    getTauri()
-                        .then(async (m) => {
-                            await m.invoke("set_system_volume", {value: targetPct});
-                            if (targetPct > 0) {
-                                await m.invoke("set_system_mute", {mute: false});
-                                setSystemMuted(false);
-                            }
-                        })
-                        .catch(() => {});
-                }
-            }
-        },
-        [
-            volumeLimit,
-            setAppVolume,
-            setSystemVolume,
-            setSystemMuted,
-            lastLocalVolumeSetRef,
-        ],
-    );
 
     const seekTo = useCallback((t: number) => {
         const clamped = Math.max(0, t);
@@ -1551,34 +1216,12 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         } else if (audioRef.current) {
             audioRef.current.currentTime = clamped;
         }
-    }, [setCurrentTime]);
+    }, [selectedSongRef, setCurrentTime]);
 
     const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const t = parseFloat(e.target.value);
         seekTo(t);
     }, [seekTo]);
-
-    const toggleSystemMute = useCallback(() => {
-        if (!isBrowserTauri()) return;
-        const shouldMute = !systemMuted;
-        setSystemMuted(shouldMute);
-        lastLocalVolumeSetRef.current = Date.now();
-        getTauri()
-            .then((m) => m.invoke("set_system_mute", {mute: shouldMute}))
-            .catch(() => {});
-    }, [systemMuted, setSystemMuted, lastLocalVolumeSetRef]);
-
-    const goUp = useCallback(() => {
-        if (!currentPath || !musicFolder) return;
-        const parent = currentPath
-            .replace(/\\/g, "/")
-            .split("/")
-            .slice(0, -1)
-            .join("\\");
-        if (parent.length >= musicFolder.length) setCurrentPath(parent);
-    }, [currentPath, musicFolder]);
-
-    // ─── return ────────────────────────────────────────────────────────────────
 
     const isLossless = selectedSong?.ext
         ? ['flac', 'wav', 'alac', 'aiff', 'dsd', 'dsf'].includes(selectedSong.ext.toLowerCase())
