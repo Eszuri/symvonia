@@ -521,7 +521,7 @@ pub fn get_system_specs() -> SystemSpecsInfo {
     CACHED_SPECS
         .get_or_init(|| {
             let cpu_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
-            let mut cpu_cores = (cpu_threads + 1) / 2;
+            let mut cpu_cores = cpu_threads.div_ceil(2);
             if cpu_cores == 0 {
                 cpu_cores = 1;
             }
