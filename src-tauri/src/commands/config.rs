@@ -89,6 +89,7 @@ pub struct SymvoniaConfig {
     pub fullscreen: bool,
     pub skipped_update_version: Option<String>,
     pub toolbar_columns: Vec<String>,
+    pub toolbar_column_widths: HashMap<String, u32>,
 }
 
 impl Default for SymvoniaConfig {
@@ -144,6 +145,21 @@ impl Default for SymvoniaConfig {
                 "size".to_string(),
                 "mtime".to_string(),
             ],
+            toolbar_column_widths: {
+                let mut map = HashMap::new();
+                map.insert("name".to_string(), 180);
+                map.insert("artist".to_string(), 112);
+                map.insert("album".to_string(), 112);
+                map.insert("track".to_string(), 56);
+                map.insert("year".to_string(), 48);
+                map.insert("genre".to_string(), 80);
+                map.insert("duration".to_string(), 64);
+                map.insert("ext".to_string(), 48);
+                map.insert("size".to_string(), 64);
+                map.insert("mtime".to_string(), 120);
+                map.insert("ctime".to_string(), 120);
+                map
+            },
             shuffle: false,
             repeat: "off".to_string(),
             shortcuts,
@@ -245,6 +261,10 @@ impl SymvoniaConfig {
         } else {
             self.toolbar_columns.retain(|c| c != "name");
             self.toolbar_columns.insert(0, "name".to_string());
+        }
+
+        for width in self.toolbar_column_widths.values_mut() {
+            *width = (*width).clamp(30, 1200);
         }
 
         // Gain boost is a linear ratio: 100% to 300%.

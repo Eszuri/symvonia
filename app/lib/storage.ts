@@ -95,6 +95,7 @@ export interface SymvoniaConfig {
     fullscreen: boolean;
     skipped_update_version: string | null;
     toolbar_columns: string[];
+    toolbar_column_widths: Record<string, number>;
 }
 
 const DEFAULT_CONFIG: SymvoniaConfig = {
@@ -125,6 +126,19 @@ const DEFAULT_CONFIG: SymvoniaConfig = {
     name_source: 'filename',
     formats: ['mp3', 'flac', 'ogg', 'wav', 'm4a', 'wma'],
     toolbar_columns: ['name', 'artist', 'album', 'year', 'duration', 'ext', 'size', 'mtime'],
+    toolbar_column_widths: {
+        name: 180,
+        artist: 112,
+        album: 112,
+        track: 56,
+        year: 48,
+        genre: 80,
+        duration: 64,
+        ext: 48,
+        size: 64,
+        mtime: 120,
+        ctime: 120,
+    },
     shuffle: false,
     repeat: 'off',
     shortcuts: {

@@ -688,6 +688,7 @@ const en: Record<string, string> = {
     'toolbar.size': 'Size',
     'toolbar.date': 'Date Modified',
     'toolbar.sortBy': 'Sort By',
+    'toolbar.resetColumnWidth': 'Reset Column Width',
 
     'metadata.heading': 'DETAIL',
     'metadata.songInfo': 'Song Info',
@@ -816,6 +817,7 @@ const en: Record<string, string> = {
     'status.closeStreaming': 'Close streaming browser',
     'status.settingItem': 'Click to change this setting',
     'status.resizeHandle': 'Drag to resize panel',
+    'status.resizeColumn': 'Drag to resize column',
     'status.clearUrl': 'Clear URL',
     'status.deleteHistory': 'Delete all history',
     'status.deleteEntry': 'Delete this entry',
@@ -1590,6 +1592,7 @@ const id: Record<string, string> = {
     'toolbar.size': 'Ukuran',
     'toolbar.date': 'Modifikasi',
     'toolbar.sortBy': 'Urutkan Berdasarkan',
+    'toolbar.resetColumnWidth': 'Reset Lebar Kolom',
 
     'metadata.heading': 'DETAIL',
     'metadata.songInfo': 'Info Lagu',
@@ -1717,7 +1720,8 @@ const id: Record<string, string> = {
     'status.closeSettings': 'Tutup pengaturan',
     'status.closeStreaming': 'Tutup peramban streaming',
     'status.settingItem': 'Klik untuk mengubah pengaturan ini',
-    'status.resizeHandle': 'Geser untuk mengubah ukuran panel',
+    'status.resizeHandle': 'Geser untuk mengubah lebar panel',
+    'status.resizeColumn': 'Geser untuk mengubah lebar kolom',
     'status.clearUrl': 'Hapus URL',
     'status.deleteHistory': 'Hapus semua riwayat',
     'status.deleteEntry': 'Hapus entri ini',
@@ -1830,7 +1834,7 @@ const id: Record<string, string> = {
     'log.autoUpdateFailed': 'Download pembaruan otomatis gagal: {msg}',
 };
 
-const all: Record<Lang, Record<string, string>> = {en, id};
+const all: Record<Lang, Record<string, string>> = { en, id };
 
 export function t(lang: Lang, key: string, vars?: Record<string, string | number>): string {
     const map = all[lang] || en;

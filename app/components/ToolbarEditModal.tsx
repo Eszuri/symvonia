@@ -15,7 +15,7 @@ export interface ColumnDefinition {
 }
 
 export const ALL_TOOLBAR_COLUMNS: ColumnDefinition[] = [
-    {key: 'name', labelKey: 'toolbarEdit.col.name', descKey: 'toolbarEdit.col.name.desc', required: true, defaultWidth: 140},
+    {key: 'name', labelKey: 'toolbarEdit.col.name', descKey: 'toolbarEdit.col.name.desc', required: true, defaultWidth: 180},
     {key: 'artist', labelKey: 'toolbarEdit.col.artist', descKey: 'toolbarEdit.col.artist.desc', defaultWidth: 112},
     {key: 'album', labelKey: 'toolbarEdit.col.album', descKey: 'toolbarEdit.col.album.desc', defaultWidth: 112},
     {key: 'track', labelKey: 'toolbarEdit.col.track', descKey: 'toolbarEdit.col.track.desc', defaultWidth: 56},
@@ -27,6 +27,20 @@ export const ALL_TOOLBAR_COLUMNS: ColumnDefinition[] = [
     {key: 'mtime', labelKey: 'toolbarEdit.col.mtime', descKey: 'toolbarEdit.col.mtime.desc', defaultWidth: 120},
     {key: 'ctime', labelKey: 'toolbarEdit.col.ctime', descKey: 'toolbarEdit.col.ctime.desc', defaultWidth: 120},
 ];
+
+export const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
+    name: 180,
+    artist: 112,
+    album: 112,
+    track: 56,
+    year: 48,
+    genre: 80,
+    duration: 64,
+    ext: 48,
+    size: 64,
+    mtime: 120,
+    ctime: 120,
+};
 
 export const DEFAULT_TOOLBAR_COLUMNS = ['name', 'artist', 'album', 'year', 'duration', 'ext', 'size', 'mtime'];
 

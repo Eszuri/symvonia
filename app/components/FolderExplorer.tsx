@@ -10,7 +10,7 @@ import {useHoverInfo} from '../contexts/HoverInfoContext';
 import {useHoverDescription} from '../hooks/useHoverDescription';
 import {getStoredValue, setStoredValue} from '../lib/storage';
 import {getTauri} from '../lib/homeState';
-import {ALL_TOOLBAR_COLUMNS, DEFAULT_TOOLBAR_COLUMNS} from './ToolbarEditModal';
+import {DEFAULT_TOOLBAR_COLUMNS, DEFAULT_COLUMN_WIDTHS} from './ToolbarEditModal';
 
 async function openDevTools() {
     try {
@@ -107,159 +107,135 @@ function loadSavedWidth(): number {
     return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Number(val) || DEFAULT_WIDTH));
 }
 
-function renderHeaderColumn(
-    colKey: string,
-    fileSort: string | undefined,
-    sortDir: string | undefined,
-    handleSortColumn: (key: string) => void,
-    lang: Lang,
-    accent: Record<string, string>,
-) {
+function loadSavedColumnWidths(): Record<string, number> {
+    const saved = getStoredValue('toolbar_column_widths', DEFAULT_COLUMN_WIDTHS);
+    if (!saved || typeof saved !== 'object') return { ...DEFAULT_COLUMN_WIDTHS };
+    return {
+        ...DEFAULT_COLUMN_WIDTHS,
+        ...saved,
+    };
+}
+
+interface HeaderColumnProps {
+    colKey: string;
+    width: number;
+    fileSort: string | undefined;
+    sortDir: string | undefined;
+    handleSortColumn: (key: string) => void;
+    onStartResize: (colKey: string, width: number, e: React.MouseEvent) => void;
+    onColumnContextMenu: (e: React.MouseEvent, colKey: string) => void;
+    isResizing: boolean;
+    lang: Lang;
+    accent: Record<string, string>;
+}
+
+const HeaderColumn = memo(function HeaderColumn({
+    colKey,
+    width,
+    fileSort,
+    sortDir,
+    handleSortColumn,
+    onStartResize,
+    onColumnContextMenu,
+    isResizing,
+    lang,
+    accent,
+}: HeaderColumnProps) {
+    const {setHoverInfo} = useHoverInfo();
     const isSorted = fileSort === colKey || (colKey === 'track' && fileSort === 'track_no');
     const sortArrow = isSorted && (
-        <span className="text-[10px] shrink-0">
+        <span className="text-[10px] shrink-0 font-bold ml-1">
             {sortDir === 'asc' ? '▲' : '▼'}
         </span>
     );
     const activeClass = isSorted ? `${accent.text400} font-bold` : '';
 
+    let title = '';
+    let align = 'justify-start text-left';
+
     switch (colKey) {
         case 'name':
-            return (
-                <button
-                    key="name"
-                    onClick={() => handleSortColumn('name')}
-                    className={`flex-1 min-w-[120px] flex items-center gap-1.5 text-left py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer min-w-0 whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.name')}
-                >
-                    <span className="truncate">{t(lang, 'toolbar.name')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.name');
+            align = 'justify-start text-left';
+            break;
         case 'artist':
-            return (
-                <button
-                    key="artist"
-                    onClick={() => handleSortColumn('artist')}
-                    className={`w-28 text-left shrink-0 flex items-center gap-1 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer min-w-0 whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.artist')}
-                >
-                    <span className="truncate">{t(lang, 'toolbar.artist')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.artist');
+            align = 'justify-start text-left';
+            break;
         case 'album':
-            return (
-                <button
-                    key="album"
-                    onClick={() => handleSortColumn('album')}
-                    className={`w-28 text-left shrink-0 flex items-center gap-1 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer min-w-0 whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.album')}
-                >
-                    <span className="truncate">{t(lang, 'toolbar.album')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.album');
+            align = 'justify-start text-left';
+            break;
         case 'track':
-            return (
-                <button
-                    key="track"
-                    onClick={() => handleSortColumn('track')}
-                    className={`w-14 text-center shrink-0 flex items-center justify-center gap-0.5 px-0.5 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.track')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'toolbar.track')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.track');
+            align = 'justify-center text-center';
+            break;
         case 'year':
-            return (
-                <button
-                    key="year"
-                    onClick={() => handleSortColumn('year')}
-                    className={`w-12 text-center shrink-0 flex items-center justify-center gap-0.5 px-0.5 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.year')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'toolbar.year')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.year');
+            align = 'justify-center text-center';
+            break;
         case 'genre':
-            return (
-                <button
-                    key="genre"
-                    onClick={() => handleSortColumn('genre')}
-                    className={`w-20 text-left shrink-0 flex items-center gap-1 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer min-w-0 whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.genre')}
-                >
-                    <span className="truncate">{t(lang, 'toolbar.genre')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.genre');
+            align = 'justify-start text-left';
+            break;
         case 'duration':
-            return (
-                <button
-                    key="duration"
-                    onClick={() => handleSortColumn('duration')}
-                    className={`w-16 text-right shrink-0 flex items-center justify-end gap-0.5 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.duration')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'toolbar.duration')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.duration');
+            align = 'justify-end text-right';
+            break;
         case 'ext':
-            return (
-                <button
-                    key="ext"
-                    onClick={() => handleSortColumn('ext')}
-                    className={`w-12 text-center shrink-0 flex items-center justify-center gap-0.5 px-0.5 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.type')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'toolbar.type')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.type');
+            align = 'justify-center text-center';
+            break;
         case 'size':
-            return (
-                <button
-                    key="size"
-                    onClick={() => handleSortColumn('size')}
-                    className={`w-16 text-right shrink-0 flex items-center justify-end gap-0.5 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.size')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'toolbar.size')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.size');
+            align = 'justify-end text-right';
+            break;
         case 'mtime':
-            return (
-                <button
-                    key="mtime"
-                    onClick={() => handleSortColumn('mtime')}
-                    className={`w-[120px] text-right shrink-0 flex items-center justify-end gap-1 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'toolbar.date')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'toolbar.date')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'toolbar.date');
+            align = 'justify-end text-right';
+            break;
         case 'ctime':
-            return (
-                <button
-                    key="ctime"
-                    onClick={() => handleSortColumn('ctime')}
-                    className={`w-[120px] text-right shrink-0 flex items-center justify-end gap-1 px-1 py-0.5 rounded hover:text-zinc-200 transition-colors cursor-pointer whitespace-nowrap ${activeClass}`}
-                    title={t(lang, 'sort.file.ctime')}
-                >
-                    <span className="whitespace-nowrap">{t(lang, 'sort.file.ctime')}</span>
-                    {sortArrow}
-                </button>
-            );
+            title = t(lang, 'sort.file.ctime');
+            align = 'justify-end text-right';
+            break;
         default:
             return null;
     }
-}
+
+    return (
+        <div
+            style={{ width, minWidth: width, maxWidth: width }}
+            className="relative shrink-0 flex items-center h-full group/col"
+            onContextMenu={(e) => onColumnContextMenu(e, colKey)}
+        >
+            <button
+                onClick={() => handleSortColumn(colKey)}
+                className={`w-full flex items-center ${align} py-0.5 px-1 rounded hover:text-zinc-200 hover:bg-zinc-800/40 transition-colors cursor-pointer min-w-0 select-none overflow-hidden ${activeClass}`}
+                title={title}
+            >
+                <span className="truncate">{title}</span>
+                {sortArrow}
+            </button>
+
+            {/* Drag Resize Separator Handle */}
+            <div
+                onMouseDown={(e) => onStartResize(colKey, width, e)}
+                onMouseEnter={() => setHoverInfo(t(lang, 'status.resizeColumn'))}
+                onMouseLeave={() => setHoverInfo(null)}
+                className="absolute -right-1 top-0 bottom-0 w-2.5 cursor-col-resize z-10 flex items-center justify-center select-none group/handle"
+                title={t(lang, 'status.resizeColumn')}
+            >
+                <div
+                    className={`w-[2px] rounded-full transition-all ${
+                        isResizing
+                            ? `${accent.bg500 ?? 'bg-indigo-500'} h-4.5 opacity-100`
+                            : 'h-3 bg-zinc-700/50 group-hover/handle:bg-indigo-400 group-hover/handle:h-4.5 opacity-60 group-hover/handle:opacity-100'
+                    }`}
+                />
+            </div>
+        </div>
+    );
+});
 
 function renderRowCell(
     colKey: string,
@@ -267,11 +243,18 @@ function renderRowCell(
     isSelected: boolean,
     isPlayingAncestor: boolean,
     isLossless: boolean,
+    width: number,
 ) {
+    const colStyle = { width, minWidth: width, maxWidth: width };
+
     switch (colKey) {
         case 'name':
             return (
-                <div key="name" className="flex-1 min-w-[120px] flex items-center gap-2 min-w-0 pr-1">
+                <div
+                    key="name"
+                    style={colStyle}
+                    className="shrink-0 flex items-center gap-2 min-w-0 pr-1 overflow-hidden"
+                >
                     <span className="shrink-0 text-[11px] flex items-center justify-center w-4">
                         {isSelected ? (
                             <span className="animate-pulse">▶</span>
@@ -286,43 +269,71 @@ function renderRowCell(
             );
         case 'artist':
             return (
-                <div key="artist" className="w-28 text-left shrink-0 px-1 truncate text-[11px] text-zinc-400 whitespace-nowrap">
+                <div
+                    key="artist"
+                    style={colStyle}
+                    className="shrink-0 text-left px-1 truncate text-[11px] text-zinc-400 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : (file.artist || '—')}
                 </div>
             );
         case 'album':
             return (
-                <div key="album" className="w-28 text-left shrink-0 px-1 truncate text-[11px] text-zinc-500 whitespace-nowrap">
+                <div
+                    key="album"
+                    style={colStyle}
+                    className="shrink-0 text-left px-1 truncate text-[11px] text-zinc-500 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : (file.album || '—')}
                 </div>
             );
         case 'track':
             return (
-                <div key="track" className="w-14 text-center shrink-0 px-0.5 text-[11px] text-zinc-500 whitespace-nowrap">
+                <div
+                    key="track"
+                    style={colStyle}
+                    className="shrink-0 text-center px-0.5 text-[11px] text-zinc-500 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : (file.track_number != null ? `#${file.track_number}` : '—')}
                 </div>
             );
         case 'year':
             return (
-                <div key="year" className="w-12 text-center shrink-0 px-0.5 text-[11px] text-zinc-500 whitespace-nowrap">
+                <div
+                    key="year"
+                    style={colStyle}
+                    className="shrink-0 text-center px-0.5 text-[11px] text-zinc-500 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : (file.year ? String(file.year) : '—')}
                 </div>
             );
         case 'genre':
             return (
-                <div key="genre" className="w-20 text-left shrink-0 px-1 truncate text-[11px] text-zinc-500 whitespace-nowrap">
+                <div
+                    key="genre"
+                    style={colStyle}
+                    className="shrink-0 text-left px-1 truncate text-[11px] text-zinc-500 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : (file.genre || '—')}
                 </div>
             );
         case 'duration':
             return (
-                <div key="duration" className="w-16 text-right shrink-0 px-1 text-[11px] text-zinc-400 whitespace-nowrap">
+                <div
+                    key="duration"
+                    style={colStyle}
+                    className="shrink-0 text-right px-1 text-[11px] text-zinc-400 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : formatDuration(file.duration)}
                 </div>
             );
         case 'ext':
             return (
-                <div key="ext" className="w-12 text-center shrink-0 flex items-center justify-center">
+                <div
+                    key="ext"
+                    style={colStyle}
+                    className="shrink-0 text-center flex items-center justify-center overflow-hidden"
+                >
                     {file.is_dir ? (
                         <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800/80 text-zinc-400 font-medium">
                             DIR
@@ -342,19 +353,31 @@ function renderRowCell(
             );
         case 'size':
             return (
-                <div key="size" className="w-16 text-right shrink-0 px-1 text-[11px] text-zinc-400 whitespace-nowrap">
+                <div
+                    key="size"
+                    style={colStyle}
+                    className="shrink-0 text-right px-1 text-[11px] text-zinc-400 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : formatSize(file.size)}
                 </div>
             );
         case 'mtime':
             return (
-                <div key="mtime" className="w-[120px] text-right shrink-0 px-1 text-[10px] text-zinc-500 whitespace-nowrap">
+                <div
+                    key="mtime"
+                    style={colStyle}
+                    className="shrink-0 text-right px-1 text-[10px] text-zinc-500 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : formatDate(file.mtime)}
                 </div>
             );
         case 'ctime':
             return (
-                <div key="ctime" className="w-[120px] text-right shrink-0 px-1 text-[10px] text-zinc-500 whitespace-nowrap">
+                <div
+                    key="ctime"
+                    style={colStyle}
+                    className="shrink-0 text-right px-1 text-[10px] text-zinc-500 whitespace-nowrap overflow-hidden"
+                >
                     {file.is_dir ? '—' : formatDate(file.ctime)}
                 </div>
             );
@@ -390,6 +413,8 @@ function FolderExplorer({
 }: FolderExplorerProps) {
     const accent = getAccent(accentColor);
     const [width, setWidth] = useState<number>(() => loadSavedWidth());
+    const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => loadSavedColumnWidths());
+    const [activeResizeCol, setActiveResizeCol] = useState<string | null>(null);
     const {setHoverInfo} = useHoverInfo();
     const [contextMenu, setContextMenu] = useState<{x: number; y: number; items: ContextMenuItem[]} | null>(null);
     const [copiedFeedback, setCopiedFeedback] = useState(false);
@@ -399,6 +424,12 @@ function FolderExplorer({
     const startXRef = useRef(0);
     const startWidthRef = useRef(DEFAULT_WIDTH);
     const widthPendingRef = useRef<number | null>(null);
+
+    const isResizingColRef = useRef(false);
+    const resizingColKeyRef = useRef<string | null>(null);
+    const resizingStartXRef = useRef(0);
+    const resizingStartWidthRef = useRef(0);
+    const pendingColWidthsRef = useRef<Record<string, number> | null>(null);
 
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -420,12 +451,11 @@ function FolderExplorer({
     const minTableWidth = useMemo(() => {
         let w = 0;
         for (const colKey of activeColumns) {
-            const def = ALL_TOOLBAR_COLUMNS.find((c) => c.key === colKey);
-            w += def ? def.defaultWidth : 80;
+            w += columnWidths[colKey] ?? DEFAULT_COLUMN_WIDTHS[colKey] ?? 80;
         }
-        w += 28; // container padding and gaps
+        w += Math.max(0, activeColumns.length - 1) * 4 + 24;
         return Math.max(340, w);
-    }, [activeColumns]);
+    }, [activeColumns, columnWidths]);
 
     // Statistics for footer
     const stats = useMemo(() => {
@@ -538,6 +568,135 @@ function FolderExplorer({
             window.removeEventListener('mouseup', onMouseUp);
         };
     }, [onMouseMove, onMouseUp]);
+
+    // Column Drag Resizing Handlers
+    const onColMouseMove = useCallback((e: MouseEvent) => {
+        if (!isResizingColRef.current || !resizingColKeyRef.current) return;
+        const colKey = resizingColKeyRef.current;
+        const deltaX = e.clientX - resizingStartXRef.current;
+        const nextWidth = Math.max(36, Math.min(1200, Math.round(resizingStartWidthRef.current + deltaX)));
+        setColumnWidths((prev) => {
+            if (prev[colKey] === nextWidth) return prev;
+            const next = {...prev, [colKey]: nextWidth};
+            pendingColWidthsRef.current = next;
+            return next;
+        });
+    }, []);
+
+    const onColMouseUpRef = useRef<(() => void) | null>(null);
+
+    const onColMouseUp = useCallback(() => {
+        if (!isResizingColRef.current) return;
+        isResizingColRef.current = false;
+        resizingColKeyRef.current = null;
+        setActiveResizeCol(null);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+
+        if (pendingColWidthsRef.current) {
+            setStoredValue('toolbar_column_widths', pendingColWidthsRef.current);
+            pendingColWidthsRef.current = null;
+        }
+
+        window.removeEventListener('mousemove', onColMouseMove);
+        if (onColMouseUpRef.current) {
+            window.removeEventListener('mouseup', onColMouseUpRef.current);
+        }
+    }, [onColMouseMove]);
+
+    useEffect(() => {
+        onColMouseUpRef.current = onColMouseUp;
+    }, [onColMouseUp]);
+
+    const handleStartResize = useCallback(
+        (colKey: string, currentWidth: number, e: React.MouseEvent) => {
+            e.stopPropagation();
+            e.preventDefault();
+            isResizingColRef.current = true;
+            resizingColKeyRef.current = colKey;
+            resizingStartXRef.current = e.clientX;
+            resizingStartWidthRef.current = currentWidth;
+            setActiveResizeCol(colKey);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            window.addEventListener('mousemove', onColMouseMove);
+            window.addEventListener('mouseup', onColMouseUp);
+        },
+        [onColMouseMove, onColMouseUp],
+    );
+
+    const handleResetSingleColumnWidth = useCallback((colKey: string) => {
+        const defaultW = DEFAULT_COLUMN_WIDTHS[colKey] ?? 80;
+        setColumnWidths((prev) => {
+            const next = {...prev, [colKey]: defaultW};
+            setStoredValue('toolbar_column_widths', next);
+            return next;
+        });
+    }, []);
+
+    const onColumnContextMenu = useCallback(
+        (e: React.MouseEvent, colKey: string) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const items: ContextMenuItem[] = [
+                ...(onOpenToolbarEdit
+                    ? [
+                          {
+                              label: t(lang, 'contextMenu.editToolbar'),
+                              icon: (
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                                      <path d="M9 3v18" />
+                                      <path d="M15 3v18" />
+                                  </svg>
+                              ),
+                              onClick: onOpenToolbarEdit,
+                          },
+                      ]
+                    : []),
+                {
+                    label: t(lang, 'toolbar.resetColumnWidth'),
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                            <path d="M8 16H3v5" />
+                        </svg>
+                    ),
+                    onClick: () => handleResetSingleColumnWidth(colKey),
+                },
+                {
+                    separator: true as const,
+                },
+                {
+                    label: t(lang, 'contextMenu.openDevTools'),
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="16 18 22 12 16 6" />
+                            <polyline points="8 6 2 12 8 18" />
+                        </svg>
+                    ),
+                    onClick: openDevTools,
+                },
+            ];
+            setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                items,
+            });
+        },
+        [lang, onOpenToolbarEdit, handleResetSingleColumnWidth, setContextMenu],
+    );
+
+    useEffect(() => {
+        return () => {
+            window.removeEventListener('mousemove', onColMouseMove);
+            if (onColMouseUpRef.current) {
+                window.removeEventListener('mouseup', onColMouseUpRef.current);
+            }
+        };
+    }, [onColMouseMove]);
 
     const handleCopyPath = useCallback(() => {
         if (!displayPath) return;
@@ -799,16 +958,21 @@ function FolderExplorer({
                         onContextMenu={onHeaderContextMenu}
                         className="sticky top-0 z-20 flex items-center px-3 py-1.5 bg-zinc-900 border-b border-zinc-800/60 text-[11px] font-semibold text-zinc-400 select-none shrink-0 uppercase tracking-wider gap-1 w-full whitespace-nowrap"
                     >
-                        {activeColumns.map((colKey) =>
-                            renderHeaderColumn(
-                                colKey,
-                                fileSort,
-                                sortDir,
-                                handleSortColumn,
-                                lang,
-                                accent,
-                            ),
-                        )}
+                        {activeColumns.map((colKey) => (
+                            <HeaderColumn
+                                key={colKey}
+                                colKey={colKey}
+                                width={columnWidths[colKey] ?? DEFAULT_COLUMN_WIDTHS[colKey] ?? 80}
+                                fileSort={fileSort}
+                                sortDir={sortDir}
+                                handleSortColumn={handleSortColumn}
+                                onStartResize={handleStartResize}
+                                onColumnContextMenu={onColumnContextMenu}
+                                isResizing={activeResizeCol === colKey}
+                                lang={lang}
+                                accent={accent}
+                            />
+                        ))}
                     </div>
 
                     {/* Content List / Skeleton / Empty State */}
@@ -851,6 +1015,7 @@ function FolderExplorer({
                                 onContextDir={onContextDir}
                                 onContextFile={onContextFile}
                                 activeColumns={activeColumns}
+                                columnWidths={columnWidths}
                                 accentBg10={accent.bg10}
                                 accentText400={accent.text400}
                                 accentBorder500={accent.border500}
@@ -912,6 +1077,7 @@ const VirtualList = memo(function VirtualList({
     onContextDir,
     onContextFile,
     activeColumns,
+    columnWidths,
     accentBg10,
     accentText400,
     accentBorder500,
@@ -928,6 +1094,7 @@ const VirtualList = memo(function VirtualList({
     onContextDir?: (e: React.MouseEvent, file: FileEntry) => void;
     onContextFile?: (e: React.MouseEvent, file: FileEntry) => void;
     activeColumns: string[];
+    columnWidths: Record<string, number>;
     accentBg10: string;
     accentText400: string;
     accentBorder500: string;
@@ -1004,6 +1171,7 @@ const VirtualList = memo(function VirtualList({
                                 isSelected,
                                 isPlayingAncestor,
                                 isLossless,
+                                columnWidths[colKey] ?? DEFAULT_COLUMN_WIDTHS[colKey] ?? 80,
                             ),
                         )}
                     </button>
