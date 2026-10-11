@@ -7,6 +7,7 @@ pub mod audio;
 pub mod commands;
 pub mod library_cache;
 pub mod media_access;
+mod taskbar;
 pub mod migration;
 pub mod sidecar;
 pub mod sidecar_lyrics;
@@ -120,6 +121,9 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let script = format!("window.__SYMVONIA_INITIAL_CONFIG__ = {};", json_str);
                 let _ = window.eval(&script);
+                if let Err(error) = taskbar::initialize(&window) {
+                    log::warn!("Taskbar controls: {error}");
+                }
 
                 let icon_bytes = include_bytes!("../icons/icon.png");
                 if let Ok(img) = image::load_from_memory(icon_bytes) {
@@ -244,6 +248,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            taskbar::update_taskbar_controls,
             list_files,
             set_library_root,
             clear_library_cache,

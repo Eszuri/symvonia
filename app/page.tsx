@@ -24,6 +24,7 @@ import {useAudioPlayer} from "./hooks/useAudioPlayer";
 import {useKeyboardShortcuts} from "./hooks/useKeyboardShortcuts";
 import {usePlayerSettings} from "./hooks/usePlayerSettings";
 import {useMediaOverlaySync} from "./hooks/useMediaOverlaySync";
+import {useTaskbarControls} from "./hooks/useTaskbarControls";
 import {getTauri, isBrowserTauri} from "./lib/homeState";
 import {resetAppConfig} from "./lib/storage";
 import {useModalRouter} from "./hooks/useModalRouter";
@@ -310,6 +311,15 @@ function HomeContent() {
     const songTitle = player.metadata?.title || player.selectedSong?.name || null;
     const songArtist = player.metadata?.artist || null;
     const songAlbum = player.metadata?.album || null;
+
+    useTaskbarControls({
+        isPlaying: player.isPlaying,
+        hasTrack: Boolean(player.selectedSong),
+        language: settings.language,
+        onTogglePlayPause: player.togglePlayPause,
+        onNext: player.playNext,
+        onPrev: player.playPrev,
+    });
 
     useMediaOverlaySync({
         isPlaying: player.isPlaying,
