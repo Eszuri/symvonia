@@ -30,6 +30,7 @@ extern "system" {
     ) -> i32;
 
     fn ShowWindow(hwnd: *mut std::ffi::c_void, n_cmd_show: i32) -> i32;
+    fn IsWindowVisible(hwnd: *mut std::ffi::c_void) -> i32;
 }
 
 #[cfg(windows)]
@@ -80,15 +81,17 @@ impl IAudioEndpointVolumeCallback_Impl for VolumeCallback_Impl {
             let _ = self.app_handle.run_on_main_thread(move || {
                 if let Some(overlay) = handle.get_webview_window("media-overlay") {
                     if let Ok(hwnd) = overlay.hwnd() {
-                        SetWindowPos(
-                            hwnd.0 as *mut _,
-                            HWND_TOPMOST,
-                            20,
-                            20,
-                            260,
-                            115,
-                            SWP_SHOWWINDOW | SWP_NOACTIVATE,
-                        );
+                        if IsWindowVisible(hwnd.0 as *mut _) == 0 {
+                            SetWindowPos(
+                                hwnd.0 as *mut _,
+                                HWND_TOPMOST,
+                                20,
+                                20,
+                                340,
+                                140,
+                                SWP_SHOWWINDOW | SWP_NOACTIVATE,
+                            );
+                        }
                     } else {
                         let _ = overlay.unminimize();
                         let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: 20.0, y: 20.0 }));
@@ -639,15 +642,17 @@ pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
             {
                 if let Ok(hwnd) = window.hwnd() {
                     unsafe {
-                        SetWindowPos(
-                            hwnd.0 as *mut _,
-                            HWND_TOPMOST,
-                            20,
-                            20,
-                            260,
-                            115,
-                            SWP_SHOWWINDOW | SWP_NOACTIVATE,
-                        );
+                        if IsWindowVisible(hwnd.0 as *mut _) == 0 {
+                            SetWindowPos(
+                                hwnd.0 as *mut _,
+                                HWND_TOPMOST,
+                                20,
+                                20,
+                                340,
+                                140,
+                                SWP_SHOWWINDOW | SWP_NOACTIVATE,
+                            );
+                        }
                         return;
                     }
                 }

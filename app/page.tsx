@@ -307,9 +307,19 @@ function HomeContent() {
         lastLocalVolumeSetRef: settings.lastLocalVolumeSetRef,
     });
 
+    const songTitle = player.metadata?.title || player.selectedSong?.name || null;
+    const songArtist = player.metadata?.artist || null;
+    const songAlbum = player.metadata?.album || null;
+
     useMediaOverlaySync({
         isPlaying: player.isPlaying,
         accentColor: settings.accentColor,
+        title: songTitle,
+        artist: songArtist,
+        album: songAlbum,
+        coverDataUrl: player.coverDataUrl,
+        currentTime: player.currentTime,
+        duration: player.duration,
         onTogglePlayPause: player.togglePlayPause,
         onNext: player.playNext,
         onPrev: player.playPrev,
