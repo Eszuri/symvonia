@@ -2,6 +2,7 @@
 
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {getAccent} from '../lib/colors';
+import type {SymvoniaConfig} from '../lib/storage';
 import type {MediaOverlaySyncPayload, MediaOverlayTimePayload} from '../hooks/useMediaOverlaySync';
 
 function formatTime(seconds: number): string {
@@ -159,8 +160,6 @@ export default function MediaOverlayPage() {
     const [overlaySize, setOverlaySize] = useState<'s' | 'm' | 'l' | 'xl'>('m');
     const [overlayBgColor, setOverlayBgColor] = useState<string>('default');
     const [overlayCustomBgHex, setOverlayCustomBgHex] = useState<string>('#09090b');
-    const [overlayTimeout, setOverlayTimeout] = useState<number>(2500);
-    const [overlayEnabled, setOverlayEnabled] = useState<boolean>(false);
 
     const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
     const animTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -168,22 +167,20 @@ export default function MediaOverlayPage() {
     const isVisibleRef = useRef<boolean>(false);
     const overlayTimeoutRef = useRef<number>(2500);
     const overlayEnabledRef = useRef<boolean>(false);
-    const lastSyncTimeRef = useRef<{time: number; timestamp: number}>({time: 0, timestamp: Date.now()});
+    const lastSyncTimeRef = useRef<{time: number; timestamp: number}>({time: 0, timestamp: 0});
 
     const loadOverlayConfig = useCallback(async () => {
         try {
             const { invoke } = await import('@tauri-apps/api/core');
-            const cfg = await invoke<any>('get_app_config');
+            const cfg = await invoke<SymvoniaConfig>('get_app_config');
             if (cfg) {
                 if (cfg.overlay_size) setOverlaySize(cfg.overlay_size);
                 if (cfg.overlay_bg_color) setOverlayBgColor(cfg.overlay_bg_color);
                 if (cfg.overlay_custom_bg_hex) setOverlayCustomBgHex(cfg.overlay_custom_bg_hex);
                 if (typeof cfg.overlay_timeout === 'number' && cfg.overlay_timeout >= 500) {
-                    setOverlayTimeout(cfg.overlay_timeout);
                     overlayTimeoutRef.current = cfg.overlay_timeout;
                 }
                 if (typeof cfg.overlay_enabled === 'boolean') {
-                    setOverlayEnabled(cfg.overlay_enabled);
                     overlayEnabledRef.current = cfg.overlay_enabled;
                 }
                 if (cfg.accent_color) setAccentColor(cfg.accent_color);
@@ -201,9 +198,11 @@ export default function MediaOverlayPage() {
             e.preventDefault();
         };
         window.addEventListener('contextmenu', preventContextMenu);
-        loadOverlayConfig();
+        // Configuration arrives asynchronously from the native backend.
+        const configTimer = setTimeout(() => { void loadOverlayConfig(); }, 0);
 
         return () => {
+            clearTimeout(configTimer);
             window.removeEventListener('contextmenu', preventContextMenu);
         };
     }, [loadOverlayConfig]);
@@ -253,7 +252,7 @@ export default function MediaOverlayPage() {
         const interval = setInterval(() => {
             const elapsed = (Date.now() - lastSyncTimeRef.current.timestamp) / 1000;
             const updated = lastSyncTimeRef.current.time + elapsed;
-            setCurrentTime((prev) => {
+            setCurrentTime(() => {
                 if (duration > 0 && updated >= duration) return duration;
                 return updated;
             });
@@ -355,7 +354,7 @@ export default function MediaOverlayPage() {
             if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
             if (animTimerRef.current) clearTimeout(animTimerRef.current);
         };
-    }, [showOverlay]);
+    }, [showOverlay, loadOverlayConfig]);
 
     const sendAction = useCallback(
         (action: 'toggle_play_pause' | 'next' | 'prev') => {

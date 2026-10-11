@@ -203,10 +203,6 @@ export function getInitialConfig(): SymvoniaConfig {
     if (inMemoryConfig) return inMemoryConfig;
 
     if (typeof window !== 'undefined') {
-        try {
-            localStorage.clear();
-        } catch {}
-
         const injected = (window as unknown as { __SYMVONIA_INITIAL_CONFIG__?: SymvoniaConfig }).__SYMVONIA_INITIAL_CONFIG__;
         if (injected && typeof injected === 'object' && injected.language) {
             const conf: SymvoniaConfig = {

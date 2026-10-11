@@ -106,6 +106,7 @@ pub fn start_engine(
 
     wallpaper_plugin_manager::verify_with_cache(&exe)?;
 
+    wallpaper_plugin_manager::ensure_bundled_shaders(app)?;
     let shaders_dir = wallpaper_plugin_manager::plugin_shaders_dir(app)?;
     let target_fps = fps.unwrap_or(30.0).clamp(1.0, 120.0);
     let target_intensity = intensity.unwrap_or(1.0).clamp(0.0, 2.0);

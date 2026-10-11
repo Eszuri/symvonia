@@ -6,6 +6,7 @@ pub mod ai_lyrics_plugin_manager;
 pub mod audio;
 pub mod commands;
 pub mod library_cache;
+pub mod media_access;
 pub mod migration;
 pub mod sidecar;
 pub mod sidecar_lyrics;
@@ -85,6 +86,7 @@ pub fn run() {
 
     let app = tauri::Builder::default()
         .manage(library_cache::LibraryCacheState::default())
+        .manage(media_access::MediaAccess::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // When a second instance is launched, focus the existing main window
             // instead of starting a duplicate process.
@@ -106,6 +108,13 @@ pub fn run() {
             let handle = app.handle();
             let _ = migration::migrate_legacy_plugins(handle);
             let initial_config = commands::config::load_config(handle);
+            if let Some(session) = &initial_config.last_session {
+                handle.state::<media_access::MediaAccess>()
+                    .allow_file(std::path::Path::new(&session.file_path));
+            }
+            if let Some(path) = &initial_config.default_wallpaper {
+                handle.asset_protocol_scope().allow_file(path)?;
+            }
             let json_str =
                 serde_json::to_string(&initial_config).unwrap_or_else(|_| "{}".to_string());
             if let Some(window) = app.get_webview_window("main") {
@@ -204,7 +213,12 @@ pub fn run() {
 
             Ok(())
         })
-        .on_page_load(|window, _payload| {
+        .on_page_load(|window, payload| {
+            // Remote streaming pages must never receive paths or settings from config.json.
+            if !matches!(window.label(), "main" | "media-overlay")
+                || !media_access::trusted_origin(&payload.url().origin().ascii_serialization()) {
+                return;
+            }
             let handle = window.app_handle();
             let initial_config = commands::config::load_config(handle);
             if let Ok(json_str) = serde_json::to_string(&initial_config) {
@@ -335,11 +349,19 @@ pub fn run() {
             hide_media_overlay,
             update_media_overlay_bounds
         ])
-        .register_uri_scheme_protocol("stream", |_app, request| {
+        .register_uri_scheme_protocol("stream", |context, request| {
+            let origin = request.headers().get("origin").and_then(|value| value.to_str().ok());
+            if context.webview_label() != "main" || origin.is_some_and(|origin| !media_access::trusted_origin(origin)) {
+                return tauri::http::Response::builder().status(403).body(Vec::new()).unwrap();
+            }
+            let cors_origin = origin.unwrap_or("http://tauri.localhost");
+            if !matches!(*request.method(), tauri::http::Method::GET | tauri::http::Method::HEAD | tauri::http::Method::OPTIONS) {
+                return tauri::http::Response::builder().status(405).body(Vec::new()).unwrap();
+            }
             if request.method() == tauri::http::Method::OPTIONS {
                 return tauri::http::Response::builder()
                     .status(200)
-                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Origin", cors_origin)
                     .header("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD")
                     .header("Access-Control-Allow-Headers", "*")
                     .body(Vec::new())
@@ -356,11 +378,16 @@ pub fn run() {
                     &decoded[..]
                 };
 
-            let path_buf = std::path::PathBuf::from(clean_path);
+            let root = context.app_handle().state::<library_cache::LibraryCacheState>().active_root();
+            let path_buf = match context.app_handle().state::<media_access::MediaAccess>()
+                .resolve(std::path::Path::new(clean_path), root.as_deref().map(std::path::Path::new)) {
+                Some(path) => path,
+                None => return tauri::http::Response::builder().status(403).body(Vec::new()).unwrap(),
+            };
             if !path_buf.exists() || !path_buf.is_file() {
                 return tauri::http::Response::builder()
                     .status(404)
-                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Origin", cors_origin)
                     .body(Vec::new())
                     .unwrap();
             }
@@ -370,7 +397,7 @@ pub fn run() {
                 Err(_) => {
                     return tauri::http::Response::builder()
                         .status(500)
-                        .header("Access-Control-Allow-Origin", "*")
+                        .header("Access-Control-Allow-Origin", cors_origin)
                         .body(Vec::new())
                         .unwrap()
                 }
@@ -389,6 +416,8 @@ pub fn run() {
                 "m4a" | "aac" | "mp4" => "audio/mp4",
                 "opus" => "audio/opus",
                 "webm" => "audio/webm",
+                "wma" => "audio/x-ms-wma",
+                "aiff" | "aif" => "audio/aiff",
                 _ => "audio/mpeg",
             };
 
@@ -420,7 +449,7 @@ pub fn run() {
                 Err(_) => {
                     return tauri::http::Response::builder()
                         .status(500)
-                        .header("Access-Control-Allow-Origin", "*")
+                        .header("Access-Control-Allow-Origin", cors_origin)
                         .body(Vec::new())
                         .unwrap()
                 }
@@ -429,10 +458,20 @@ pub fn run() {
             const MAX_CHUNK: u64 = 2 * 1024 * 1024;
             let end = std::cmp::min(requested_end, start.saturating_add(MAX_CHUNK - 1));
             let length = (end - start + 1) as usize;
+            if request.method() == tauri::http::Method::HEAD {
+                return tauri::http::Response::builder()
+                    .status(206)
+                    .header("Access-Control-Allow-Origin", cors_origin)
+                    .header("Accept-Ranges", "bytes")
+                    .header("Content-Range", format!("bytes {}-{}/{}", start, end, file_size))
+                    .header("Content-Length", length.to_string())
+                    .header("Content-Type", mime)
+                    .body(Vec::new()).unwrap();
+            }
             if file.seek(std::io::SeekFrom::Start(start)).is_err() {
                 return tauri::http::Response::builder()
                     .status(500)
-                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Origin", cors_origin)
                     .body(Vec::new())
                     .unwrap();
             }
@@ -441,14 +480,14 @@ pub fn run() {
             if file.read_exact(&mut buffer).is_err() {
                 return tauri::http::Response::builder()
                     .status(500)
-                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Origin", cors_origin)
                     .body(Vec::new())
                     .unwrap();
             }
 
             tauri::http::Response::builder()
                 .status(206)
-                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Origin", cors_origin)
                 .header("Accept-Ranges", "bytes")
                 .header(
                     "Content-Range",

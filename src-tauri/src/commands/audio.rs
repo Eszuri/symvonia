@@ -9,7 +9,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::library_cache::{self, CachedEntry, DirectorySnapshot, LibraryCacheState};
 use crate::sidecar;
@@ -752,7 +752,8 @@ pub async fn list_files(
     formats: Vec<String>,
 ) -> Result<Vec<FileEntry>, String> {
     let cache = cache.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let handle = app.clone();
+    let files = tauri::async_runtime::spawn_blocking(move || {
         list_files_inner(
             app,
             cache,
@@ -765,7 +766,17 @@ pub async fn list_files(
         )
     })
     .await
-    .map_err(|e| format!("Task error: {}", e))?
+    .map_err(|e| format!("Task error: {}", e))??;
+    let access = handle.state::<crate::media_access::MediaAccess>();
+    let root = handle.state::<LibraryCacheState>().active_root();
+    for file in &files {
+        if !file.is_dir {
+            if let Some(path) = access.resolve(Path::new(&file.path), root.as_deref().map(Path::new)) {
+                access.allow_file(&path);
+            }
+        }
+    }
+    Ok(files)
 }
 
 #[tauri::command]

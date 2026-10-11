@@ -8,10 +8,11 @@ next-env.d.ts
 /.PrivateKey
 .env
 RELEASE.md
-plugin/src-audio-engine/bin
-plugin/src-audio-engine/obj
+plugin/**/bin/
+plugin/**/obj/
+plugin/**/publish/
+plugin/**/build/
 release setup.txt
-plugin/src-audio-engine/publish/*
 test_ai/*
 __pycache__/*
 src-tauri/target_test/*

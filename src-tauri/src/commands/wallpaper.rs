@@ -31,13 +31,19 @@ pub fn set_reset_on_close(enabled: bool) {
 }
 
 #[tauri::command]
-pub async fn pick_wallpaper() -> Result<Option<String>, String> {
+pub async fn pick_wallpaper(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri::Manager;
     let file = rfd::AsyncFileDialog::new()
         .set_title("Pilih gambar wallpaper default")
         .add_filter("Images", &["png", "jpg", "jpeg", "bmp", "webp"])
         .pick_file()
         .await;
-    Ok(file.map(|f| f.path().to_string_lossy().to_string()))
+    if let Some(file) = file {
+        app.asset_protocol_scope().allow_file(file.path()).map_err(|e| e.to_string())?;
+        Ok(Some(file.path().to_string_lossy().to_string()))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tauri::command]

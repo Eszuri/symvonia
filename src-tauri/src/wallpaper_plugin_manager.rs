@@ -86,6 +86,22 @@ pub fn plugin_shaders_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(plugin_dir(app)?.join("shaders"))
 }
 
+fn write_bundled_shaders(dir: &Path) -> Result<(), String> {
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create shader directory: {e}"))?;
+    for (name, source) in [
+        ("fullscreen_vs.hlsl", include_bytes!("../../plugin/src-wallpaper-engine/shaders/fullscreen_vs.hlsl").as_slice()),
+        ("cover_reactive_ps.hlsl", include_bytes!("../../plugin/src-wallpaper-engine/shaders/cover_reactive_ps.hlsl").as_slice()),
+    ] {
+        fs::write(dir.join(name), source)
+            .map_err(|e| format!("Failed to install shader {name}: {e}"))?;
+    }
+    Ok(())
+}
+
+pub fn ensure_bundled_shaders(app: &AppHandle) -> Result<(), String> {
+    write_bundled_shaders(&plugin_shaders_dir(app)?)
+}
+
 pub fn get_status(app: &AppHandle) -> Result<PluginStatus, String> {
     let exe = plugin_exe_path(app)?;
     if !exe.exists() {
@@ -396,6 +412,7 @@ pub fn download_and_install(app: &AppHandle, url: Option<String>) -> Result<Plug
         return Err(error);
     }
 
+    ensure_bundled_shaders(app)?;
     kill_existing_plugin_process();
     invalidate_cache();
     let _ = fs::remove_file(&final_path);
@@ -469,4 +486,25 @@ pub fn uninstall(app: &AppHandle) -> Result<(), String> {
         let _ = fs::remove_file(&manifest_file);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_shaders_repair_an_exe_only_installation() {
+        let dir = std::env::temp_dir().join(format!("symvonia-shaders-{}", std::process::id()));
+        let shaders = dir.join("shaders");
+        write_bundled_shaders(&shaders).unwrap();
+        for name in ["fullscreen_vs.hlsl", "cover_reactive_ps.hlsl"] {
+            assert!(fs::read_to_string(shaders.join(name)).unwrap().contains("main("));
+        }
+        fs::write(shaders.join("fullscreen_vs.hlsl"), b"outdated").unwrap();
+        fs::remove_file(shaders.join("cover_reactive_ps.hlsl")).unwrap();
+        write_bundled_shaders(&shaders).unwrap();
+        assert_ne!(fs::read(shaders.join("fullscreen_vs.hlsl")).unwrap(), b"outdated");
+        assert!(shaders.join("cover_reactive_ps.hlsl").is_file());
+        fs::remove_dir_all(dir).unwrap();
+    }
 }

@@ -416,17 +416,21 @@ pub async fn pick_folder() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub async fn pick_audio_file() -> Result<Option<String>, String> {
+pub async fn pick_audio_file(app: AppHandle) -> Result<Option<String>, String> {
     let file = rfd::AsyncFileDialog::new()
         .set_title("Pilih file audio")
         .add_filter("Audio", &["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"])
         .pick_file()
         .await;
-    Ok(file.map(|f| f.path().to_string_lossy().to_string()))
+    Ok(file.map(|f| {
+        app.state::<crate::media_access::MediaAccess>().allow_file(f.path());
+        f.path().to_string_lossy().to_string()
+    }))
 }
 
 #[tauri::command]
 pub async fn pick_single_file(
+    app: AppHandle,
     title: Option<String>,
     filters: Option<Vec<serde_json::Value>>,
 ) -> Result<Option<String>, String> {
@@ -448,7 +452,10 @@ pub async fn pick_single_file(
     }
 
     let file = dialog.pick_file().await;
-    Ok(file.map(|f| f.path().to_string_lossy().to_string()))
+    Ok(file.map(|f| {
+        app.state::<crate::media_access::MediaAccess>().allow_file(f.path());
+        f.path().to_string_lossy().to_string()
+    }))
 }
 
 #[tauri::command]

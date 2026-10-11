@@ -92,7 +92,9 @@ Download installer `.msi` atau `.exe` dari [halaman Releases](https://github.com
 
 **Persyaratan Sistem:**
 - **OS:** Windows 10 1809+ atau Windows 11
-- **Node.js** ≥ 18.18
+- **Node.js** ≥ 20.9
+- **.NET SDK 8** 
+- **CMake** ≥ 3.24
 - **Rust toolchain** ≥ 1.77.2 (via [rustup](https://rustup.rs/))
 - **Visual Studio 2022 Build Tools** — dengan workload "Desktop development with C++" (diperlukan oleh Tauri)
 - **WebView2 Runtime** (sama seperti di atas)

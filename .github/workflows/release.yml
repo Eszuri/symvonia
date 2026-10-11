@@ -43,6 +43,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+
       - name: Inject environment variables into config
         run: node scripts/inject-env.cjs
         env:
@@ -52,6 +58,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Test Rust backend
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --locked
+
+      - name: Test AI lyrics plugin
+        run: dotnet test plugin/src-ai-lyrics/AiLyricsPlugin.Tests/AiLyricsPlugin.Tests.csproj -c Release
 
       - name: Build C# Unified Audio Engine Plugin
         run: dotnet publish plugin/src-engine/SymvoniaEngine.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o plugin/src-engine/publish

@@ -309,7 +309,7 @@ export function usePlayerSettings() {
             if (backendConfig.file_sort) setFileSortStateInternal(backendConfig.file_sort);
             if (backendConfig.sort_dir) setSortDirStateInternal(backendConfig.sort_dir);
             if (backendConfig.volume_mode) {
-                const effMode = backendConfig.output_mode ?? outputMode;
+                const effMode = normalizeOutputMode(backendConfig.output_mode);
                 const target = (effMode === 'wasapi_exclusive' && backendConfig.volume_mode === 'system')
                     ? 'app'
                     : (backendConfig.volume_mode as 'app' | 'system');

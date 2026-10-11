@@ -19,7 +19,7 @@ Engine audio performa tinggi untuk pemutaran audio lossless bit-perfect secara e
 
 #### Perintah Build:
 ```bash
-dotnet publish plugin/src-audio-engine/AudioEngine.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o plugin/src-audio-engine/publish
+dotnet publish plugin/src-engine/SymvoniaEngine.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o plugin/src-engine/publish
 ```
 
 ---
@@ -104,7 +104,7 @@ Setiap plugin berjalan sebagai *standalone headless console application* yang me
 ## 📂 Lokasi Instalasi Runtime pada Symvonia Player
 
 Saat diunduh atau diimpor oleh Symvonia Player, plugin dipasang pada direktori `AppData` pengguna:
-- **Audio Engine**: `%APPDATA%\com.symvonia.player\plugins\audio-engine\`
+- **Audio Engine**: `%APPDATA%\com.symvonia.player\plugins\engine\`
 - **AI Lyrics Plugin**: `%APPDATA%\com.symvonia.player\plugins\ai-lyrics\`
 - **Wallpaper Engine**: `%APPDATA%\com.symvonia.player\plugins\wallpaper-engine\`
 

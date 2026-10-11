@@ -411,22 +411,24 @@ function HomeContent() {
     }, [settingsOpen, streamingOpen, equalizerOpen, metadataEditOpen, lyricsSearchOpen, toolbarEditOpen, hideGlobalContextMenu]);
 
     // M1: Destructure specific stable functions to avoid regenerating callback on every currentTime update
+    const {setMusicFolder, setDefaultWallpaper} = settings;
+    const {setCurrentPath, setSelectedSong, setMetadata, resetPlayer} = player;
     const doPickFolder = useCallback(async () => {
         try {
             const mod = await getTauri();
             const result = await mod.invoke<string | null>("pick_folder");
             if (result) {
-                settings.setMusicFolder(result);
-                player.setCurrentPath(result);
-                player.setSelectedSong(null);
-                player.setMetadata(null);
+                setMusicFolder(result);
+                setCurrentPath(result);
+                setSelectedSong(null);
+                setMetadata(null);
             }
         } catch (e) {
             const msg = String(e);
             setDebugError(`${t(lang, "alert.error")}: ${msg}`);
             showError(`${t(lang, "alert.error")}: ${msg}`);
         }
-    }, [lang, settings.setMusicFolder, player.setCurrentPath, player.setSelectedSong, player.setMetadata, setDebugError, showError]);
+    }, [lang, setMusicFolder, setCurrentPath, setSelectedSong, setMetadata, setDebugError, showError]);
 
     const handlePickFolder = useCallback(async () => {
         if (!isBrowserTauri()) {
@@ -459,20 +461,20 @@ function HomeContent() {
             const mod = await getTauri();
             const result = await mod.invoke<string | null>("pick_wallpaper");
             if (result) {
-                settings.setDefaultWallpaper(result);
+                setDefaultWallpaper(result);
             }
         } catch (e) {
             const msg = String(e);
             setDebugError(`${t(lang, "alert.error")}: ${msg}`);
             showError(`${t(lang, "alert.error")}: ${msg}`);
         }
-    }, [lang, settings.setDefaultWallpaper, setDebugError, showError]);
+    }, [lang, setDefaultWallpaper, setDebugError, showError]);
 
     const confirmFolderChange = useCallback(() => {
         setPendingFolderChange(false);
-        player.resetPlayer();
+        resetPlayer();
         doPickFolder();
-    }, [doPickFolder, player.resetPlayer]);
+    }, [doPickFolder, resetPlayer]);
 
     const displayPath = player.currentPath || "";
 
