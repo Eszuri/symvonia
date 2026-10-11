@@ -655,8 +655,8 @@ function HomePlayerArea({
                                                     volumeLimit={volumeLimit}
                                                     handleVolumeChange={handleVolumeChange}
                                                     onToggleSystemMute={toggleSystemMute}
-                                                    disabled={runtime?.effectiveMode === 'wasapi_shared' || runtime?.effectiveMode === 'wasapi_exclusive' ? volumeMode === 'system' : false}
                                                     accentColor={accentColor}
+                                                    isExclusiveMode={runtime?.requestedMode === 'wasapi_exclusive' || runtime?.effectiveMode === 'wasapi_exclusive'}
                                                 />
                                             </div>
                                             <div className="w-full flex justify-center mt-1">

@@ -4,7 +4,7 @@ import React, { memo, useEffect, useRef } from 'react';
 import { getAccent } from '../lib/colors';
 import { t, type Lang } from '../lib/translations';
 import { useHoverDescription } from '../hooks/useHoverDescription';
-import { VolumeMuteIcon, VolumeLowIcon, VolumeHighIcon, MinusIcon, PlusIcon, ResetIcon } from './icons';
+import { VolumeMuteIcon, VolumeLowIcon, VolumeHighIcon, MinusIcon, PlusIcon, ResetIcon, LockIcon } from './icons';
 
 interface VolumeControlProps {
     lang: Lang;
@@ -18,6 +18,7 @@ interface VolumeControlProps {
     onToggleSystemMute: () => void;
     accentColor: string;
     disabled?: boolean;
+    isExclusiveMode?: boolean;
 }
 
 function VolumeIcon({ muted, low }: { muted: boolean; low: boolean }) {
@@ -42,6 +43,7 @@ function VolumeControl({
     onToggleSystemMute,
     accentColor,
     disabled = false,
+    isExclusiveMode = false,
 }: VolumeControlProps) {
     const accent = getAccent(accentColor);
     const prevVolumeRef = useRef(volume);
@@ -246,8 +248,16 @@ function VolumeControl({
                 </span>
             </div>
 
-            <span className="text-[10px] text-zinc-300 font-medium tracking-tight -mt-1.5 leading-none select-none text-center">
-                {t(lang, isSystem ? 'general.volumeMode.system' : 'general.volumeMode.app')}
+            <span
+                title={isExclusiveMode ? t(lang, 'general.volumeMode.nativeDisabled') : undefined}
+                className="text-[10px] text-zinc-300 font-medium tracking-tight -mt-1.5 leading-none select-none text-center inline-flex items-center justify-center gap-1"
+            >
+                {isExclusiveMode && (
+                    <span className="text-amber-400 inline-flex items-center" aria-label="WASAPI Exclusive Locked">
+                        <LockIcon size={10} />
+                    </span>
+                )}
+                <span>{t(lang, isSystem ? 'general.volumeMode.system' : 'general.volumeMode.app')}</span>
             </span>
         </div>
     );

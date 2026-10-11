@@ -871,7 +871,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 requestId,
                 generation,
                 startAt: seekPosition ?? 0,
-                volume: volumeModeRef.current === "app" ? appVolume : 1,
+                volume: (nativeOutputMode === "exclusive" || volumeModeRef.current === "app") ? appVolume : 1,
             };
             if (outputDeviceRef.current) cmd.deviceId = outputDeviceRef.current;
             await bpSendCommandRef.current(cmd);
@@ -1099,11 +1099,13 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
     useEffect(() => {
         if (!nativeEngineActiveRef.current) return;
+        const isExclusive = nativeEngineModeRef.current === "exclusive" || outputMode === "wasapi_exclusive";
+        const targetVol = (isExclusive || volumeMode === "app") ? appVolume : 1;
         bpSendCommandRef.current({
             command: "set_volume",
-            volume: volumeMode === "app" ? appVolume : 1,
+            volume: targetVol,
         }).catch(() => {});
-    }, [volumeMode, appVolume]);
+    }, [volumeMode, appVolume, outputMode]);
 
     // HTML Audio Element Lifecycle
     useEffect(() => {

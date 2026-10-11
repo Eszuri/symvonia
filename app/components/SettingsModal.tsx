@@ -257,7 +257,7 @@ export default function SettingsModal({
                                         updateDownloaded={updateDownloaded}
                                         updateTotal={updateTotal}
                                         outputMode={outputMode}
-                                        nativeOutputActive={audioRuntime.effectiveMode === 'wasapi_shared' || audioRuntime.effectiveMode === 'wasapi_exclusive'}
+                                        nativeOutputActive={outputMode === 'wasapi_exclusive' || audioRuntime.effectiveMode === 'wasapi_exclusive'}
                                         hideWallpaperGroup={isWallpaperPluginInstalled}
                                     />
                                 )}

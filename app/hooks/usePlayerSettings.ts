@@ -42,7 +42,12 @@ export function usePlayerSettings() {
     const [fileSort, setFileSortStateInternal] = useState(init.file_sort);
     const [sortDir, setSortDirStateInternal] = useState<string>(init.sort_dir);
     const [nameSource, setNameSourceStateInternal] = useState<string>(init.name_source);
-    const [volumeMode, setVolumeModeStateInternal] = useState<'app' | 'system'>(init.volume_mode as 'app' | 'system');
+    const [volumeMode, setVolumeModeStateInternal] = useState<'app' | 'system'>(() => {
+        if (init.output_mode === 'wasapi_exclusive' && init.volume_mode === 'system') {
+            return 'app';
+        }
+        return (init.volume_mode as 'app' | 'system') || 'app';
+    });
     const [appVolume, setAppVolumeState] = useState<number>(init.app_volume);
     const [systemVolume, setSystemVolumeState] = useState<number>(1);
     const [systemVolumeSynced, setSystemVolumeSynced] = useState(false);
@@ -184,9 +189,10 @@ export function usePlayerSettings() {
     }, []);
 
     const setVolumeModeState = useCallback((v: 'app' | 'system') => {
-        setVolumeModeStateInternal(v);
-        setStoredValue('volume_mode', v);
-    }, []);
+        const target = (outputMode === 'wasapi_exclusive' && v === 'system') ? 'app' : v;
+        setVolumeModeStateInternal(target);
+        setStoredValue('volume_mode', target);
+    }, [outputMode]);
 
     const setFormatsState = useCallback((v: string[]) => {
         setFormatsStateInternal(v);
@@ -292,8 +298,13 @@ export function usePlayerSettings() {
             if (backendConfig.folder_sort) setFolderSortStateInternal(backendConfig.folder_sort);
             if (backendConfig.file_sort) setFileSortStateInternal(backendConfig.file_sort);
             if (backendConfig.sort_dir) setSortDirStateInternal(backendConfig.sort_dir);
-            if (backendConfig.name_source) setNameSourceStateInternal(backendConfig.name_source);
-            if (backendConfig.volume_mode) setVolumeModeStateInternal(backendConfig.volume_mode as 'app' | 'system');
+            if (backendConfig.volume_mode) {
+                const effMode = backendConfig.output_mode ?? outputMode;
+                const target = (effMode === 'wasapi_exclusive' && backendConfig.volume_mode === 'system')
+                    ? 'app'
+                    : (backendConfig.volume_mode as 'app' | 'system');
+                setVolumeModeStateInternal(target);
+            }
             if (backendConfig.app_volume !== undefined) {
                 setAppVolumeState(backendConfig.app_volume);
                 appVolumeRef.current = backendConfig.app_volume;
@@ -499,6 +510,10 @@ export function usePlayerSettings() {
     const setOutputMode = useCallback((mode: OutputMode) => {
         setOutputModeStateInternal(mode);
         setStoredValue('output_mode', mode);
+        if (mode === 'wasapi_exclusive' && volumeModeRef.current === 'system') {
+            setVolumeModeStateInternal('app');
+            setStoredValue('volume_mode', 'app');
+        }
     }, []);
 
     const setAutoFallbackHtmlAudio = useCallback((v: boolean) => {

@@ -183,7 +183,7 @@ const en: Record<string, string> = {
     'general.resetWallpaper.targetBlack': 'Reset target: Solid black color',
 
     'general.volumeMode.title': 'Volume Mode',
-    'general.volumeMode.nativeDisabled': 'System volume is unavailable while native WASAPI output is active',
+    'general.volumeMode.nativeDisabled': 'System volume is unavailable while WASAPI Exclusive (bit-perfect) is active',
     'general.volumeMode.desc': 'App Volume: controlled by the app. System Volume: follows your Windows volume.',
     'general.volumeMode.app': 'App Volume',
     'general.volumeMode.system': 'System Volume',
@@ -542,7 +542,7 @@ const en: Record<string, string> = {
 
     'gainBoost.desc': 'Boost volume above 100%. Use with caution to avoid audio distortion.',
     'gainBoost.unsupported': 'Gain boost is not supported in this environment',
-    'gainBoost.disabledBp': 'Disabled in WASAPI Shared/Exclusive (bit-perfect) mode',
+    'gainBoost.disabledBp': 'Gain Boost disabled in WASAPI Shared/Exclusive (bit-perfect) mode',
     'gainBoost.resetTooltip': 'Reset gain to 100%',
     'gainBoost.warningTooltip': 'High gain boost (> 200%) may cause audio distortion or clipping!',
 
@@ -1137,7 +1137,7 @@ const id: Record<string, string> = {
     'general.resetWallpaper.targetBlack': 'Tujuan reset: Warna hitam solid',
 
     'general.volumeMode.title': 'Mode Volume',
-    'general.volumeMode.nativeDisabled': 'Volume sistem tidak tersedia saat output WASAPI native aktif',
+    'general.volumeMode.nativeDisabled': 'Volume sistem tidak tersedia saat output WASAPI Exclusive (bit-perfect) aktif',
     'general.volumeMode.desc': 'App Volume: diatur oleh aplikasi secara mandiri. System Volume: mengikuti volume Windows.',
     'general.volumeMode.app': 'Volume Aplikasi',
     'general.volumeMode.system': 'Volume Sistem',
@@ -1497,7 +1497,7 @@ const id: Record<string, string> = {
 
     'gainBoost.desc': 'Boost volume di atas 100%. Gunakan dengan hati-hati untuk menghindari distorsi suara.',
     'gainBoost.unsupported': 'Gain boost tidak didukung di lingkungan ini',
-    'gainBoost.disabledBp': 'Dinonaktifkan di mode WASAPI Shared/Exclusive (bit-perfect)',
+    'gainBoost.disabledBp': 'Gain Boost dinonaktifkan di mode WASAPI Shared/Exclusive (bit-perfect)',
     'gainBoost.resetTooltip': 'Reset gain ke 100%',
     'gainBoost.warningTooltip': 'Gain boost tinggi (> 200%) dapat menyebabkan distorsi suara atau clipping!',
 
