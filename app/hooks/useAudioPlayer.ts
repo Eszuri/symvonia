@@ -1113,6 +1113,13 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         audioRef.current = audio;
         audio.volume = volumeModeRef.current === "app" ? appVolume : 1;
 
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+            try {
+                navigator.mediaSession.metadata = null;
+                navigator.mediaSession.playbackState = 'none';
+            } catch {}
+        }
+
         const isHtmlPlaybackActive = () => !nativeEngineActiveRef.current && outputModeRef.current === 'html_audio';
         const handlePlay = () => {
             if (!isHtmlPlaybackActive()) return;

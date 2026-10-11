@@ -94,6 +94,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
                     break;
                 }
             }
+            if (!action) {
+                if (key === 'MediaPlayPause') action = 'playPause';
+                else if (key === 'MediaTrackNext') action = 'next';
+                else if (key === 'MediaTrackPrevious') action = 'prev';
+            }
             if (!action) return;
 
             e.preventDefault();

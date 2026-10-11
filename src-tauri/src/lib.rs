@@ -67,6 +67,22 @@ fn decode_percent(s: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(windows)]
+    {
+        let flag = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,HardwareMediaKeyHandling,MediaSessionService,GlobalMediaControls";
+        let combined = match std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
+            Ok(existing) if !existing.is_empty() => {
+                if !existing.contains("HardwareMediaKeyHandling") {
+                    format!("{} {}", existing, flag)
+                } else {
+                    existing
+                }
+            }
+            _ => flag.to_string(),
+        };
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", combined);
+    }
+
     let app = tauri::Builder::default()
         .manage(library_cache::LibraryCacheState::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
