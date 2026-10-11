@@ -598,6 +598,15 @@ function HomeContent() {
                 setFadeAudio={settings.setFadeAudio}
                 fadeDuration={settings.fadeDuration}
                 setFadeDuration={settings.setFadeDuration}
+                overlayPosition={settings.overlayPosition}
+                setOverlayPosition={settings.setOverlayPosition}
+                overlayBgColor={settings.overlayBgColor}
+                setOverlayBgColor={settings.setOverlayBgColor}
+                overlayCustomBgHex={settings.overlayCustomBgHex}
+                setOverlayCustomBgHex={settings.setOverlayCustomBgHex}
+                overlaySize={settings.overlaySize}
+                setOverlaySize={settings.setOverlaySize}
+                onPreviewOverlay={settings.previewMediaOverlay}
                 volume={player.activeVolume}
                 defaultWallpaper={settings.defaultWallpaper}
                 onPickWallpaper={handlePickWallpaper}

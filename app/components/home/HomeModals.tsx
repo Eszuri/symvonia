@@ -5,7 +5,7 @@ import SettingsModal from '../SettingsModal';
 import StreamingModal from '../StreamingModal';
 import type {LogEntry} from '../../types/log';
 import {t, type Lang} from '../../lib/translations';
-import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition} from '../../lib/storage';
+import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition, OverlayPosition, OverlayBgColor, OverlaySize} from '../../lib/storage';
 import type {PlaybackRuntimeInfo} from '../../hooks/audio/playbackTypes';
 
 interface HomeModalsProps {
@@ -35,6 +35,15 @@ interface HomeModalsProps {
     setFadeAudio: (v: boolean) => void;
     fadeDuration: number;
     setFadeDuration: (v: number) => void;
+    overlayPosition: OverlayPosition;
+    setOverlayPosition: (v: OverlayPosition) => void;
+    overlayBgColor: OverlayBgColor;
+    setOverlayBgColor: (v: OverlayBgColor) => void;
+    overlayCustomBgHex: string;
+    setOverlayCustomBgHex: (v: string) => void;
+    overlaySize: OverlaySize;
+    setOverlaySize: (v: OverlaySize) => void;
+    onPreviewOverlay?: () => void;
     volume: number;
     defaultWallpaper: string | null;
     onPickWallpaper: () => void;
@@ -111,6 +120,15 @@ export default function HomeModals({
     setFadeAudio,
     fadeDuration,
     setFadeDuration,
+    overlayPosition,
+    setOverlayPosition,
+    overlayBgColor,
+    setOverlayBgColor,
+    overlayCustomBgHex,
+    setOverlayCustomBgHex,
+    overlaySize,
+    setOverlaySize,
+    onPreviewOverlay,
     volume,
     defaultWallpaper,
     onPickWallpaper,
@@ -198,6 +216,15 @@ export default function HomeModals({
                 setFadeAudio={setFadeAudio}
                 fadeDuration={fadeDuration}
                 setFadeDuration={setFadeDuration}
+                overlayPosition={overlayPosition}
+                setOverlayPosition={setOverlayPosition}
+                overlayBgColor={overlayBgColor}
+                setOverlayBgColor={setOverlayBgColor}
+                overlayCustomBgHex={overlayCustomBgHex}
+                setOverlayCustomBgHex={setOverlayCustomBgHex}
+                overlaySize={overlaySize}
+                setOverlaySize={setOverlaySize}
+                onPreviewOverlay={onPreviewOverlay}
                 volume={volume}
                 defaultWallpaper={defaultWallpaper}
                 onPickWallpaper={onPickWallpaper}

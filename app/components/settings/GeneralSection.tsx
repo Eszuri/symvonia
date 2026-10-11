@@ -7,7 +7,7 @@ import {getAccent} from '../../lib/colors';
 import {t, type Lang} from '../../lib/translations';
 import {SelectStub, SettingGroup, SettingRow, ToggleStub} from './controls';
 import {useHoverDescription} from '../../hooks/useHoverDescription';
-import type {OutputMode, WallpaperFitMode} from '../../lib/storage';
+import type {OutputMode, WallpaperFitMode, OverlayPosition, OverlayBgColor, OverlaySize} from '../../lib/storage';
 
 export default function GeneralSection({
     lang,
@@ -30,6 +30,15 @@ export default function GeneralSection({
     setFadeAudio,
     fadeDuration,
     setFadeDuration,
+    overlayPosition = 'top_left',
+    setOverlayPosition,
+    overlayBgColor = 'default',
+    setOverlayBgColor,
+    overlayCustomBgHex = '#09090b',
+    setOverlayCustomBgHex,
+    overlaySize = 'm',
+    setOverlaySize,
+    onPreviewOverlay,
     volume,
     defaultWallpaper,
     onPickWallpaper,
@@ -66,6 +75,15 @@ export default function GeneralSection({
     setFadeAudio: (v: boolean) => void;
     fadeDuration: number;
     setFadeDuration: (v: number) => void;
+    overlayPosition?: OverlayPosition;
+    setOverlayPosition?: (v: OverlayPosition) => void;
+    overlayBgColor?: OverlayBgColor;
+    setOverlayBgColor?: (v: OverlayBgColor) => void;
+    overlayCustomBgHex?: string;
+    setOverlayCustomBgHex?: (v: string) => void;
+    overlaySize?: OverlaySize;
+    setOverlaySize?: (v: OverlaySize) => void;
+    onPreviewOverlay?: () => void;
     volume: number;
     defaultWallpaper: string | null;
     onPickWallpaper: () => void;
@@ -315,6 +333,98 @@ export default function GeneralSection({
                             currentVolume={volume}
                             lang={lang}
                         />
+                    </SettingRow>
+                )}
+            </SettingGroup>
+
+            <SettingGroup title={t(lang, 'general.group.overlay')}>
+                <SettingRow
+                    title={t(lang, 'general.overlayPosition.title')}
+                    description={t(lang, 'general.overlayPosition.desc')}
+                >
+                    <SelectStub
+                        options={[
+                            ['top_left', t(lang, 'general.overlayPosition.topLeft')],
+                            ['top_center', t(lang, 'general.overlayPosition.topCenter')],
+                            ['top_right', t(lang, 'general.overlayPosition.topRight')],
+                            ['bottom_left', t(lang, 'general.overlayPosition.bottomLeft')],
+                            ['bottom_center', t(lang, 'general.overlayPosition.bottomCenter')],
+                            ['bottom_right', t(lang, 'general.overlayPosition.bottomRight')],
+                        ]}
+                        value={overlayPosition}
+                        onChange={(v) => setOverlayPosition?.(v as OverlayPosition)}
+                        accent={accent}
+                        accentColor={accentColor}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    title={t(lang, 'general.overlaySize.title')}
+                    description={t(lang, 'general.overlaySize.desc')}
+                >
+                    <SelectStub
+                        options={[
+                            ['s', t(lang, 'general.overlaySize.s')],
+                            ['m', t(lang, 'general.overlaySize.m')],
+                            ['l', t(lang, 'general.overlaySize.l')],
+                            ['xl', t(lang, 'general.overlaySize.xl')],
+                        ]}
+                        value={overlaySize}
+                        onChange={(v) => setOverlaySize?.(v as OverlaySize)}
+                        accent={accent}
+                        accentColor={accentColor}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    title={t(lang, 'general.overlayBgColor.title')}
+                    description={t(lang, 'general.overlayBgColor.desc')}
+                >
+                    <div className="flex flex-col items-end gap-2">
+                        <SelectStub
+                            options={[
+                                ['default', t(lang, 'general.overlayBgColor.default')],
+                                ['black', t(lang, 'general.overlayBgColor.black')],
+                                ['charcoal', t(lang, 'general.overlayBgColor.charcoal')],
+                                ['slate', t(lang, 'general.overlayBgColor.slate')],
+                                ['accent', t(lang, 'general.overlayBgColor.accent')],
+                                ['custom', t(lang, 'general.overlayBgColor.custom')],
+                            ]}
+                            value={overlayBgColor}
+                            onChange={(v) => setOverlayBgColor?.(v as OverlayBgColor)}
+                            accent={accent}
+                            accentColor={accentColor}
+                        />
+                        {overlayBgColor === 'custom' && (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    value={overlayCustomBgHex}
+                                    onChange={(e) => setOverlayCustomBgHex?.(e.target.value)}
+                                    className="w-7 h-7 rounded cursor-pointer bg-transparent border-0 p-0"
+                                />
+                                <span className="text-xs text-zinc-400 font-mono">{overlayCustomBgHex}</span>
+                            </div>
+                        )}
+                    </div>
+                </SettingRow>
+
+                {onPreviewOverlay && (
+                    <SettingRow
+                        title={t(lang, 'general.overlayPreview.title')}
+                        description={t(lang, 'general.overlayPreview.desc')}
+                    >
+                        <button
+                            type="button"
+                            onClick={onPreviewOverlay}
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 hover:text-white border border-zinc-700/60 shadow-xs transition-all cursor-pointer active:scale-[0.98] flex items-center gap-1.5"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            <span>{t(lang, 'general.overlayPreview.btn')}</span>
+                        </button>
                     </SettingRow>
                 )}
             </SettingGroup>

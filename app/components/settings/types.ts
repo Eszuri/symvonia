@@ -1,6 +1,6 @@
 import type {LogEntry} from '../../types/log';
 import type {Lang} from '../../lib/translations';
-import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition} from '../../lib/storage';
+import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition, OverlayPosition, OverlayBgColor, OverlaySize} from '../../lib/storage';
 import type {PlaybackRuntimeInfo} from '../../hooks/audio/playbackTypes';
 
 export type SectionId = 'general' | 'storage' | 'sort' | 'shortcut' | 'style' | 'plugin' | 'audio' | 'lyrics' | 'wallpaper' | 'changelog' | 'about' | 'debug';
@@ -29,6 +29,15 @@ export interface SettingsModalProps {
     setFadeAudio: (v: boolean) => void;
     fadeDuration: number;
     setFadeDuration: (v: number) => void;
+    overlayPosition: OverlayPosition;
+    setOverlayPosition: (v: OverlayPosition) => void;
+    overlayBgColor: OverlayBgColor;
+    setOverlayBgColor: (v: OverlayBgColor) => void;
+    overlayCustomBgHex: string;
+    setOverlayCustomBgHex: (v: string) => void;
+    overlaySize: OverlaySize;
+    setOverlaySize: (v: OverlaySize) => void;
+    onPreviewOverlay?: () => void;
     volume: number;
     defaultWallpaper: string | null;
     onPickWallpaper: () => void;

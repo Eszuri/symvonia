@@ -47,6 +47,15 @@ export default function SettingsModal({
     setFadeAudio,
     fadeDuration,
     setFadeDuration,
+    overlayPosition,
+    setOverlayPosition,
+    overlayBgColor,
+    setOverlayBgColor,
+    overlayCustomBgHex,
+    setOverlayCustomBgHex,
+    overlaySize,
+    setOverlaySize,
+    onPreviewOverlay,
     volume,
     defaultWallpaper,
     onPickWallpaper,
@@ -218,6 +227,15 @@ export default function SettingsModal({
                                         setFadeAudio={setFadeAudio}
                                         fadeDuration={fadeDuration}
                                         setFadeDuration={setFadeDuration}
+                                        overlayPosition={overlayPosition}
+                                        setOverlayPosition={setOverlayPosition}
+                                        overlayBgColor={overlayBgColor}
+                                        setOverlayBgColor={setOverlayBgColor}
+                                        overlayCustomBgHex={overlayCustomBgHex}
+                                        setOverlayCustomBgHex={setOverlayCustomBgHex}
+                                        overlaySize={overlaySize}
+                                        setOverlaySize={setOverlaySize}
+                                        onPreviewOverlay={onPreviewOverlay}
                                         volume={volume}
                                         defaultWallpaper={defaultWallpaper}
                                         onPickWallpaper={onPickWallpaper}

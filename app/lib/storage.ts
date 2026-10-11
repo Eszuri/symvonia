@@ -49,6 +49,10 @@ export function normalizeOutputMode(value: unknown): OutputMode {
 
 
 
+export type OverlayPosition = 'top_left' | 'top_center' | 'top_right' | 'bottom_left' | 'bottom_center' | 'bottom_right';
+export type OverlayBgColor = 'default' | 'black' | 'charcoal' | 'slate' | 'accent' | 'custom';
+export type OverlaySize = 's' | 'm' | 'l' | 'xl';
+
 export interface SymvoniaConfig {
     music_folder: string | null;
     language: 'id' | 'en';
@@ -96,6 +100,10 @@ export interface SymvoniaConfig {
     skipped_update_version: string | null;
     toolbar_columns: string[];
     toolbar_column_widths: Record<string, number>;
+    overlay_position: OverlayPosition;
+    overlay_bg_color: OverlayBgColor;
+    overlay_custom_bg_hex: string;
+    overlay_size: OverlaySize;
 }
 
 const DEFAULT_CONFIG: SymvoniaConfig = {
@@ -168,6 +176,10 @@ const DEFAULT_CONFIG: SymvoniaConfig = {
     stream_history: [],
     fullscreen: false,
     skipped_update_version: null,
+    overlay_position: 'top_left',
+    overlay_bg_color: 'default',
+    overlay_custom_bg_hex: '#09090b',
+    overlay_size: 'm',
 };
 
 // Global in-memory configuration cache

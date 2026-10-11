@@ -17,6 +17,16 @@ use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoInit
 use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eRender, eMultimedia};
 
 #[cfg(windows)]
+#[cfg(windows)]
+#[repr(C)]
+struct RECT {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
+#[cfg(windows)]
 #[link(name = "user32")]
 extern "system" {
     fn SetWindowPos(
@@ -31,7 +41,16 @@ extern "system" {
 
     fn ShowWindow(hwnd: *mut std::ffi::c_void, n_cmd_show: i32) -> i32;
     fn IsWindowVisible(hwnd: *mut std::ffi::c_void) -> i32;
+    fn SystemParametersInfoW(uiAction: u32, uiParam: u32, pvParam: *mut std::ffi::c_void, fWinIni: u32) -> i32;
+    fn GetSystemMetrics(nIndex: i32) -> i32;
 }
+
+#[cfg(windows)]
+const SPI_GETWORKAREA: u32 = 0x0030;
+#[cfg(windows)]
+const SM_CXSCREEN: i32 = 0;
+#[cfg(windows)]
+const SM_CYSCREEN: i32 = 1;
 
 #[cfg(windows)]
 const HWND_TOPMOST: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
@@ -41,6 +60,51 @@ const SWP_NOACTIVATE: u32 = 0x0010;
 const SWP_SHOWWINDOW: u32 = 0x0040;
 #[cfg(windows)]
 const SW_HIDE: i32 = 0;
+#[cfg(windows)]
+const SWP_NOZORDER: u32 = 0x0004;
+
+pub fn calculate_overlay_bounds(app: &AppHandle) -> (i32, i32, i32, i32) {
+    let config = crate::commands::config::load_config(app);
+    let (w, h) = match config.overlay_size.as_str() {
+        "s" => (280, 115),
+        "l" => (400, 160),
+        "xl" => (460, 180),
+        _ => (340, 140),
+    };
+
+    #[cfg(windows)]
+    {
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+        let ok = unsafe {
+            SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut rc as *mut _ as *mut std::ffi::c_void, 0)
+        };
+        let (work_left, work_top, work_right, work_bottom) = if ok != 0 {
+            (rc.left, rc.top, rc.right, rc.bottom)
+        } else {
+            let cx = unsafe { GetSystemMetrics(SM_CXSCREEN) }.max(800);
+            let cy = unsafe { GetSystemMetrics(SM_CYSCREEN) }.max(600);
+            (0, 0, cx, cy - 40)
+        };
+
+        let margin = 20;
+        let x = match config.overlay_position.as_str() {
+            "top_center" | "bottom_center" => work_left + (work_right - work_left - w) / 2,
+            "top_right" | "bottom_right" => work_right - w - margin,
+            _ => work_left + margin,
+        };
+        let y = match config.overlay_position.as_str() {
+            "bottom_left" | "bottom_center" | "bottom_right" => work_bottom - h - margin,
+            _ => work_top + margin,
+        };
+
+        (x, y, w, h)
+    }
+
+    #[cfg(not(windows))]
+    {
+        (20, 20, w, h)
+    }
+}
 
 #[cfg(windows)]
 static VOLUME_CALLBACK_REGISTERED: AtomicBool = AtomicBool::new(false);
@@ -80,21 +144,23 @@ impl IAudioEndpointVolumeCallback_Impl for VolumeCallback_Impl {
             let handle = self.app_handle.clone();
             let _ = self.app_handle.run_on_main_thread(move || {
                 if let Some(overlay) = handle.get_webview_window("media-overlay") {
+                    let (x, y, w, h) = calculate_overlay_bounds(&handle);
                     if let Ok(hwnd) = overlay.hwnd() {
                         if IsWindowVisible(hwnd.0 as *mut _) == 0 {
                             SetWindowPos(
                                 hwnd.0 as *mut _,
                                 HWND_TOPMOST,
-                                20,
-                                20,
-                                340,
-                                140,
+                                x,
+                                y,
+                                w,
+                                h,
                                 SWP_SHOWWINDOW | SWP_NOACTIVATE,
                             );
                         }
                     } else {
                         let _ = overlay.unminimize();
-                        let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: 20.0, y: 20.0 }));
+                        let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize { width: w as f64, height: h as f64 }));
+                        let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: x as f64, y: y as f64 }));
                         let _ = overlay.show();
                         let _ = overlay.set_always_on_top(true);
                     }
@@ -638,6 +704,7 @@ pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = handle.get_webview_window("media-overlay") {
+            let (x, y, w, h) = calculate_overlay_bounds(&handle);
             #[cfg(windows)]
             {
                 if let Ok(hwnd) = window.hwnd() {
@@ -646,10 +713,10 @@ pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
                             SetWindowPos(
                                 hwnd.0 as *mut _,
                                 HWND_TOPMOST,
-                                20,
-                                20,
-                                340,
-                                140,
+                                x,
+                                y,
+                                w,
+                                h,
                                 SWP_SHOWWINDOW | SWP_NOACTIVATE,
                             );
                         }
@@ -658,9 +725,40 @@ pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
                 }
             }
             let _ = window.unminimize();
-            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: 20.0, y: 20.0 }));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: w as f64, height: h as f64 }));
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: x as f64, y: y as f64 }));
             let _ = window.show();
             let _ = window.set_always_on_top(true);
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_media_overlay_bounds(app: AppHandle) -> Result<(), String> {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window("media-overlay") {
+            let (x, y, w, h) = calculate_overlay_bounds(&handle);
+            #[cfg(windows)]
+            {
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        SetWindowPos(
+                            hwnd.0 as *mut _,
+                            HWND_TOPMOST,
+                            x,
+                            y,
+                            w,
+                            h,
+                            SWP_NOACTIVATE | SWP_NOZORDER,
+                        );
+                        return;
+                    }
+                }
+            }
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: w as f64, height: h as f64 }));
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: x as f64, y: y as f64 }));
         }
     });
     Ok(())

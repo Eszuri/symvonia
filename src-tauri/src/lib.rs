@@ -231,7 +231,8 @@ pub fn run() {
             get_wallpaper_engine_state,
             is_wallpaper_engine_running,
             show_media_overlay,
-            hide_media_overlay
+            hide_media_overlay,
+            update_media_overlay_bounds
         ])
         .register_uri_scheme_protocol("stream", |_app, request| {
             if request.method() == tauri::http::Method::OPTIONS {

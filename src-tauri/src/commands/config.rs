@@ -90,6 +90,30 @@ pub struct SymvoniaConfig {
     pub skipped_update_version: Option<String>,
     pub toolbar_columns: Vec<String>,
     pub toolbar_column_widths: HashMap<String, u32>,
+    #[serde(default = "default_overlay_position")]
+    pub overlay_position: String,
+    #[serde(default = "default_overlay_bg_color")]
+    pub overlay_bg_color: String,
+    #[serde(default = "default_overlay_custom_bg_hex")]
+    pub overlay_custom_bg_hex: String,
+    #[serde(default = "default_overlay_size")]
+    pub overlay_size: String,
+}
+
+fn default_overlay_position() -> String {
+    "top_left".to_string()
+}
+
+fn default_overlay_bg_color() -> String {
+    "default".to_string()
+}
+
+fn default_overlay_custom_bg_hex() -> String {
+    "#09090b".to_string()
+}
+
+fn default_overlay_size() -> String {
+    "m".to_string()
 }
 
 impl Default for SymvoniaConfig {
@@ -178,6 +202,10 @@ impl Default for SymvoniaConfig {
             stream_history: Vec::new(),
             fullscreen: false,
             skipped_update_version: None,
+            overlay_position: "top_left".to_string(),
+            overlay_bg_color: "default".to_string(),
+            overlay_custom_bg_hex: "#09090b".to_string(),
+            overlay_size: "m".to_string(),
         }
     }
 }
@@ -305,6 +333,13 @@ impl SymvoniaConfig {
         // Wallpaper engine FPS and intensity clamping
         self.wallpaper_engine_fps = self.wallpaper_engine_fps.clamp(1.0, 120.0);
         self.wallpaper_engine_intensity = self.wallpaper_engine_intensity.clamp(0.0, 2.0);
+
+        if !matches!(self.overlay_position.as_str(), "top_left" | "top_center" | "top_right" | "bottom_left" | "bottom_center" | "bottom_right") {
+            self.overlay_position = "top_left".to_string();
+        }
+        if !matches!(self.overlay_size.as_str(), "s" | "m" | "l" | "xl") {
+            self.overlay_size = "m".to_string();
+        }
     }
 }
 

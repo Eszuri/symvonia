@@ -16,6 +16,9 @@ import {
     type WallpaperEffect,
     type WallpaperTransition,
     type SymvoniaConfig,
+    type OverlayPosition,
+    type OverlayBgColor,
+    type OverlaySize,
 } from '../lib/storage';
 import type {Lang} from '../lib/translations';
 
@@ -67,6 +70,18 @@ export function usePlayerSettings() {
     const [fadeDuration, setFadeDurationStateInternal] = useState(init.fade_duration);
     const [toolbarColumns, setToolbarColumnsStateInternal] = useState<string[]>(
         init.toolbar_columns ?? ['name', 'artist', 'album', 'year', 'duration', 'ext', 'size', 'mtime']
+    );
+    const [overlayPosition, setOverlayPositionStateInternal] = useState<OverlayPosition>(
+        init.overlay_position ?? 'top_left'
+    );
+    const [overlayBgColor, setOverlayBgColorStateInternal] = useState<OverlayBgColor>(
+        init.overlay_bg_color ?? 'default'
+    );
+    const [overlayCustomBgHex, setOverlayCustomBgHexStateInternal] = useState<string>(
+        init.overlay_custom_bg_hex ?? '#09090b'
+    );
+    const [overlaySize, setOverlaySizeStateInternal] = useState<OverlaySize>(
+        init.overlay_size ?? 'm'
     );
 
     const shortcutsRef = useRef<Record<ShortcutAction, string>>({
@@ -303,6 +318,10 @@ export function usePlayerSettings() {
             if (backendConfig.toolbar_columns && backendConfig.toolbar_columns.length > 0) {
                 setToolbarColumnsStateInternal(backendConfig.toolbar_columns);
             }
+            if (backendConfig.overlay_position !== undefined) setOverlayPositionStateInternal(backendConfig.overlay_position);
+            if (backendConfig.overlay_bg_color !== undefined) setOverlayBgColorStateInternal(backendConfig.overlay_bg_color);
+            if (backendConfig.overlay_custom_bg_hex !== undefined) setOverlayCustomBgHexStateInternal(backendConfig.overlay_custom_bg_hex);
+            if (backendConfig.overlay_size !== undefined) setOverlaySizeStateInternal(backendConfig.overlay_size);
         }).catch(err => {
             console.error('[Symvonia Settings] Failed to load config from backend:', err);
         });
@@ -489,6 +508,49 @@ export function usePlayerSettings() {
         setStoredValue('pause_if_muted', v);
     }, []);
 
+    const syncOverlayBounds = useCallback(async () => {
+        try {
+            const t = await getTauri();
+            await t.invoke('update_media_overlay_bounds');
+            const { emit } = await import('@tauri-apps/api/event');
+            await emit('media-overlay-config-changed');
+        } catch {}
+    }, []);
+
+    const setOverlayPosition = useCallback((pos: OverlayPosition) => {
+        setOverlayPositionStateInternal(pos);
+        setStoredValue('overlay_position', pos);
+        syncOverlayBounds();
+    }, [syncOverlayBounds]);
+
+    const setOverlayBgColor = useCallback((bg: OverlayBgColor) => {
+        setOverlayBgColorStateInternal(bg);
+        setStoredValue('overlay_bg_color', bg);
+        syncOverlayBounds();
+    }, [syncOverlayBounds]);
+
+    const setOverlayCustomBgHex = useCallback((hex: string) => {
+        setOverlayCustomBgHexStateInternal(hex);
+        setStoredValue('overlay_custom_bg_hex', hex);
+        syncOverlayBounds();
+    }, [syncOverlayBounds]);
+
+    const setOverlaySize = useCallback((size: OverlaySize) => {
+        setOverlaySizeStateInternal(size);
+        setStoredValue('overlay_size', size);
+        syncOverlayBounds();
+    }, [syncOverlayBounds]);
+
+    const previewMediaOverlay = useCallback(async () => {
+        try {
+            const t = await getTauri();
+            await t.invoke('update_media_overlay_bounds');
+            const { emit } = await import('@tauri-apps/api/event');
+            await emit('media-overlay-config-changed');
+            await t.invoke('show_media_overlay');
+        } catch {}
+    }, []);
+
     return {
         musicFolder,
         setMusicFolder,
@@ -568,5 +630,14 @@ export function usePlayerSettings() {
         fadeDurationRef,
         toolbarColumns,
         setToolbarColumns,
+        overlayPosition,
+        setOverlayPosition,
+        overlayBgColor,
+        setOverlayBgColor,
+        overlayCustomBgHex,
+        setOverlayCustomBgHex,
+        overlaySize,
+        setOverlaySize,
+        previewMediaOverlay,
     };
 }
