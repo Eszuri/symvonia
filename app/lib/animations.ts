@@ -1,4 +1,4 @@
-import type {Transition} from "framer-motion";
+import type {Transition, Variants} from "framer-motion";
 
 
 const contentTransition: Transition = {
@@ -15,7 +15,7 @@ export const contentMotion = {
 };
 
 /** Directional folder navigation animation (drill-in & drill-out). */
-export const folderNavVariants = {
+export const folderNavVariants: Variants = {
     initial: (direction: 'forward' | 'backward') => ({
         opacity: 0,
         x: direction === 'forward' ? 24 : -24,
@@ -25,7 +25,7 @@ export const folderNavVariants = {
         x: 0,
         transition: {
             duration: 0.2,
-            ease: [0.25, 1, 0.5, 1],
+            ease: [0.25, 1, 0.5, 1] as const,
         },
     },
     exit: (direction: 'forward' | 'backward') => ({
@@ -33,7 +33,7 @@ export const folderNavVariants = {
         x: direction === 'forward' ? -24 : 24,
         transition: {
             duration: 0.14,
-            ease: [0.4, 0, 1, 1],
+            ease: [0.4, 0, 1, 1] as const,
         },
     }),
 };

@@ -23,18 +23,39 @@ import {useAppUpdater} from "./hooks/useAppUpdater";
 import {useAudioPlayer} from "./hooks/useAudioPlayer";
 import {useKeyboardShortcuts} from "./hooks/useKeyboardShortcuts";
 import {usePlayerSettings} from "./hooks/usePlayerSettings";
+import {useMediaOverlaySync} from "./hooks/useMediaOverlaySync";
 import {getTauri, isBrowserTauri} from "./lib/homeState";
 import {resetAppConfig} from "./lib/storage";
 import {useModalRouter} from "./hooks/useModalRouter";
 import {useGlobalContextMenu} from "./hooks/useGlobalContextMenu";
 import {useBitPerfectEngine} from "./hooks/useBitPerfectEngine";
+import MediaOverlayPage from "./media-overlay/page";
 
 export default function Home() {
+    const isOverlay = useSyncExternalStore(
+        () => () => {},
+        () => {
+            if (typeof window === "undefined") return false;
+            if (window.location.search.includes("overlay=1")) return true;
+            if (window.location.pathname.includes("media-overlay")) return true;
+            try {
+                const internals = (window as unknown as { __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } } }).__TAURI_INTERNALS__;
+                if (internals?.metadata?.currentWindow?.label === "media-overlay") return true;
+            } catch {}
+            return false;
+        },
+        () => false,
+    );
+
     const mounted = useSyncExternalStore(
         () => () => {},
         () => true,
         () => false,
     );
+
+    if (isOverlay) {
+        return <MediaOverlayPage />;
+    }
 
     return (
         <HoverInfoProvider>
@@ -284,6 +305,14 @@ function HomeContent() {
         volumeLimitRef: settings.volumeLimitRef,
         audioRef: player.audioRef,
         lastLocalVolumeSetRef: settings.lastLocalVolumeSetRef,
+    });
+
+    useMediaOverlaySync({
+        isPlaying: player.isPlaying,
+        accentColor: settings.accentColor,
+        onTogglePlayPause: player.togglePlayPause,
+        onNext: player.playNext,
+        onPrev: player.playPrev,
     });
 
     const {

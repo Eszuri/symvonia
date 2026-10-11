@@ -390,9 +390,8 @@ export function usePlayerSettings() {
                     await registerVolumeCallback();
                 });
 
-                if (await currentWindow.isFocused()) {
-                    await registerVolumeCallback();
-                }
+                // Always register immediately on startup without requiring prior focus
+                await registerVolumeCallback();
 
             } catch {
                 if (!cancelled) setSystemVolumeSynced(true);

@@ -12,9 +12,34 @@ use windows::Win32::Media::Audio::Endpoints::{
 #[cfg(windows)]
 use windows::Win32::Media::Audio::AUDIO_VOLUME_NOTIFICATION_DATA;
 #[cfg(windows)]
-use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoInitializeEx, COINIT_APARTMENTTHREADED};
+use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoInitializeEx, COINIT_MULTITHREADED};
 #[cfg(windows)]
 use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eRender, eMultimedia};
+
+#[cfg(windows)]
+#[link(name = "user32")]
+extern "system" {
+    fn SetWindowPos(
+        hwnd: *mut std::ffi::c_void,
+        hwnd_insert_after: *mut std::ffi::c_void,
+        x: i32,
+        y: i32,
+        cx: i32,
+        cy: i32,
+        u_flags: u32,
+    ) -> i32;
+
+    fn ShowWindow(hwnd: *mut std::ffi::c_void, n_cmd_show: i32) -> i32;
+}
+
+#[cfg(windows)]
+const HWND_TOPMOST: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
+#[cfg(windows)]
+const SWP_NOACTIVATE: u32 = 0x0010;
+#[cfg(windows)]
+const SWP_SHOWWINDOW: u32 = 0x0040;
+#[cfg(windows)]
+const SW_HIDE: i32 = 0;
 
 #[cfg(windows)]
 static VOLUME_CALLBACK_REGISTERED: AtomicBool = AtomicBool::new(false);
@@ -44,10 +69,33 @@ impl IAudioEndpointVolumeCallback_Impl for VolumeCallback_Impl {
             let notification = &*pnotify;
             let volume_pct = (notification.fMasterVolume * 100.0).round() as u32;
             let is_muted = notification.bMuted.as_bool();
+            let vol_clamped = volume_pct.clamp(0, 100);
             
             let _ = self.app_handle.emit("system-volume-changed", VolumeChangeEvent {
-                volume: volume_pct.clamp(0, 100),
+                volume: vol_clamped,
                 muted: is_muted,
+            });
+
+            let handle = self.app_handle.clone();
+            let _ = self.app_handle.run_on_main_thread(move || {
+                if let Some(overlay) = handle.get_webview_window("media-overlay") {
+                    if let Ok(hwnd) = overlay.hwnd() {
+                        SetWindowPos(
+                            hwnd.0 as *mut _,
+                            HWND_TOPMOST,
+                            20,
+                            20,
+                            260,
+                            115,
+                            SWP_SHOWWINDOW | SWP_NOACTIVATE,
+                        );
+                    } else {
+                        let _ = overlay.unminimize();
+                        let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: 20.0, y: 20.0 }));
+                        let _ = overlay.show();
+                        let _ = overlay.set_always_on_top(true);
+                    }
+                }
             });
         }
         Ok(())
@@ -125,7 +173,7 @@ pub fn get_system_volume() -> Result<u32, String> {
 }
 
 #[tauri::command]
-pub fn set_system_volume(value: u32) -> Result<(), String> {
+pub fn set_system_volume(app: AppHandle, value: u32) -> Result<(), String> {
     #[cfg(windows)]
     {
         unsafe {
@@ -134,11 +182,21 @@ pub fn set_system_volume(value: u32) -> Result<(), String> {
                 endpoint
                     .SetMasterVolumeLevelScalar(pct, std::ptr::null())
                     .map_err(|e| format!("SetMasterVolumeLevelScalar failed: {}", e))
-            })
+            })?;
         }
+
+        let _ = show_media_overlay(app.clone());
+        let _ = app.emit("system-volume-changed", VolumeChangeEvent {
+            volume: value.clamp(0, 100),
+            muted: value == 0,
+        });
+
+        Ok(())
     }
     #[cfg(not(windows))]
     {
+        let _ = app;
+        let _ = value;
         Err("System volume only available on Windows".to_string())
     }
 }
@@ -163,19 +221,30 @@ pub fn get_system_mute() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn set_system_mute(mute: bool) -> Result<(), String> {
+pub fn set_system_mute(app: AppHandle, mute: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
+        let current_vol = get_system_volume().unwrap_or(0);
         unsafe {
             with_endpoint_volume(|endpoint| {
                 endpoint
                     .SetMute(windows::Win32::Foundation::BOOL::from(mute), std::ptr::null())
                     .map_err(|e| format!("SetMute failed: {}", e))
-            })
+            })?;
         }
+
+        let _ = show_media_overlay(app.clone());
+        let _ = app.emit("system-volume-changed", VolumeChangeEvent {
+            volume: current_vol,
+            muted: mute,
+        });
+
+        Ok(())
     }
     #[cfg(not(windows))]
     {
+        let _ = app;
+        let _ = mute;
         Err("System mute only available on Windows".to_string())
     }
 }
@@ -189,46 +258,48 @@ pub fn register_volume_callback(app: AppHandle) -> Result<(), String> {
 
     std::thread::spawn(move || {
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
-            let enumerator: IMMDeviceEnumerator = match CoCreateInstance(
-                &MMDeviceEnumerator,
-                None,
-                CLSCTX_INPROC_SERVER,
-            ) {
-                Ok(e) => e,
-                Err(_) => return,
-            };
+            for _attempt in 0..20 {
+                if VOLUME_CALLBACK_REGISTERED.load(Ordering::SeqCst) {
+                    return;
+                }
 
-            let device = match enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia) {
-                Ok(d) => d,
-                Err(_) => return,
-            };
+                let enumerator: Result<IMMDeviceEnumerator, _> = CoCreateInstance(
+                    &MMDeviceEnumerator,
+                    None,
+                    CLSCTX_INPROC_SERVER,
+                );
 
-            let endpoint: IAudioEndpointVolume = match device.Activate(CLSCTX_INPROC_SERVER, None) {
-                Ok(e) => e,
-                Err(_) => return,
-            };
+                if let Ok(enumerator) = enumerator {
+                    if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia) {
+                        if let Ok(endpoint) = device.Activate::<IAudioEndpointVolume>(CLSCTX_INPROC_SERVER, None) {
+                            let callback_impl = VolumeCallback {
+                                app_handle: app.clone(),
+                            };
+                            let callback: IAudioEndpointVolumeCallback = callback_impl.into();
 
-            let callback_impl = VolumeCallback {
-                app_handle: app.clone(),
-            };
-            let callback: IAudioEndpointVolumeCallback = callback_impl.into();
+                            if endpoint.RegisterControlChangeNotify(&callback).is_ok() {
+                                VOLUME_CALLBACK_REGISTERED.store(true, Ordering::SeqCst);
+                                
+                                let _ = Box::leak(Box::new(VolumeCallbackWrapper {
+                                    callback,
+                                    endpoint,
+                                }));
 
-            if endpoint.RegisterControlChangeNotify(&callback).is_ok() {
-                VOLUME_CALLBACK_REGISTERED.store(true, Ordering::SeqCst);
-                
-                let _ = Box::leak(Box::new(VolumeCallbackWrapper {
-                    callback,
-                    endpoint,
-                }));
-
-                loop {
-                    std::thread::sleep(Duration::from_secs(1));
-                    if !VOLUME_CALLBACK_REGISTERED.load(Ordering::SeqCst) {
-                        break;
+                                loop {
+                                    std::thread::sleep(Duration::from_secs(1));
+                                    if !VOLUME_CALLBACK_REGISTERED.load(Ordering::SeqCst) {
+                                        break;
+                                    }
+                                }
+                                return;
+                            }
+                        }
                     }
                 }
+
+                std::thread::sleep(Duration::from_millis(250));
             }
         }
     });
@@ -558,4 +629,56 @@ pub fn get_app_environment() -> AppEnvironmentInfo {
         },
     }
 }
+
+#[tauri::command]
+pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window("media-overlay") {
+            #[cfg(windows)]
+            {
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        SetWindowPos(
+                            hwnd.0 as *mut _,
+                            HWND_TOPMOST,
+                            20,
+                            20,
+                            260,
+                            115,
+                            SWP_SHOWWINDOW | SWP_NOACTIVATE,
+                        );
+                        return;
+                    }
+                }
+            }
+            let _ = window.unminimize();
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: 20.0, y: 20.0 }));
+            let _ = window.show();
+            let _ = window.set_always_on_top(true);
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn hide_media_overlay(app: AppHandle) -> Result<(), String> {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window("media-overlay") {
+            #[cfg(windows)]
+            {
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        ShowWindow(hwnd.0 as *mut _, SW_HIDE);
+                        return;
+                    }
+                }
+            }
+            let _ = window.hide();
+        }
+    });
+    Ok(())
+}
+
 

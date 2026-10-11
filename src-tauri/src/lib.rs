@@ -105,6 +105,11 @@ pub fn run() {
                 );
             }
 
+            #[cfg(windows)]
+            {
+                let _ = commands::system::register_volume_callback(handle.clone());
+            }
+
             Ok(())
         })
         .on_page_load(|window, _payload| {
@@ -113,6 +118,14 @@ pub fn run() {
             if let Ok(json_str) = serde_json::to_string(&initial_config) {
                 let script = format!("window.__SYMVONIA_INITIAL_CONFIG__ = {};", json_str);
                 let _ = window.eval(&script);
+            }
+        })
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    let app = window.app_handle();
+                    app.exit(0);
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -214,7 +227,9 @@ pub fn run() {
             set_wallpaper_fit_mode,
             get_wallpaper_fit_mode,
             get_wallpaper_engine_state,
-            is_wallpaper_engine_running
+            is_wallpaper_engine_running,
+            show_media_overlay,
+            hide_media_overlay
         ])
         .register_uri_scheme_protocol("stream", |_app, request| {
             if request.method() == tauri::http::Method::OPTIONS {

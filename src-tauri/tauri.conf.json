@@ -12,6 +12,7 @@
     "app": {
         "windows": [
             {
+                "label": "main",
                 "title": "Symvonia",
                 "width": 1000,
                 "height": 700,
@@ -20,6 +21,24 @@
                 "resizable": true,
                 "fullscreen": false,
                 "maximized": true
+            },
+            {
+                "label": "media-overlay",
+                "title": "Symvonia Media Overlay",
+                "url": "media-overlay",
+                "width": 260,
+                "height": 115,
+                "resizable": false,
+                "decorations": false,
+                "transparent": true,
+                "alwaysOnTop": true,
+                "skipTaskbar": true,
+                "visible": false,
+                "shadow": false,
+                "focus": false,
+                "acceptFirstMouse": true,
+                "x": 20,
+                "y": 20
             }
         ],
         "security": {
