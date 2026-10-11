@@ -127,7 +127,8 @@ public sealed class AudioPlayer : IDisposable
         {
             StopLocked();
 
-            _reader = new AudioFileReader(path) { Volume = _volume };
+            _reader = CreatePositionedReader(path, startAt);
+            _reader.Volume = _volume;
             _device = ResolveDevice(deviceId);
             _pausable = new PausableSampleProvider(_reader);
 
@@ -146,10 +147,31 @@ public sealed class AudioPlayer : IDisposable
             _currentMode = mode;
             _requestId = requestId;
             _generation = generation;
-            if (startAt.HasValue)
-                _reader.CurrentTime = TimeSpan.FromSeconds(Math.Clamp(startAt.Value, 0, _reader.TotalTime.TotalSeconds));
             _output.Play();
             StartProgressTimerLocked();
+        }
+    }
+
+    private static AudioFileReader CreatePositionedReader(string path, double? startAt)
+    {
+        var reader = new AudioFileReader(path);
+        try
+        {
+            var position = startAt.HasValue && double.IsFinite(startAt.Value)
+                ? Math.Clamp(startAt.Value, 0, reader.TotalTime.TotalSeconds)
+                : 0;
+            if (position > 0)
+            {
+                var frame = new float[reader.WaveFormat.Channels];
+                reader.Read(frame, 0, frame.Length);
+                reader.CurrentTime = TimeSpan.FromSeconds(position);
+            }
+            return reader;
+        }
+        catch
+        {
+            reader.Dispose();
+            throw;
         }
     }
 
