@@ -1,10 +1,10 @@
 'use client';
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {SelectStub, SettingGroup, SettingRow, ToggleStub} from './controls';
 import {t, type Lang} from '../../lib/translations';
 import {getAccent} from '../../lib/colors';
-import {useBitPerfectEngine, type EngineDevice} from '../../hooks/useBitPerfectEngine';
+import {useBitPerfectEngine, type EngineDevice, type WasapiSupportResult} from '../../hooks/useBitPerfectEngine';
 import type {PlaybackRuntimeInfo} from '../../hooks/audio/playbackTypes';
 import type {OutputMode} from '../../lib/storage';
 import ConfirmDialog from '../ConfirmDialog';
@@ -39,7 +39,7 @@ export default function AudioSection({
     setAutoFallbackHtmlAudio?: (v: boolean) => void;
 }) {
     const accent = getAccent(accentColor);
-    const {status, getDevices} = useBitPerfectEngine();
+    const {status, getDevices, testDevice} = useBitPerfectEngine();
     const [devices, setDevices] = useState<EngineDevice[]>([]);
     const [devicesLoading, setDevicesLoading] = useState(false);
     const [devicesError, setDevicesError] = useState<string | null>(null);
@@ -48,6 +48,18 @@ export default function AudioSection({
     const [prevPropDevice, setPrevPropDevice] = useState(outputDevice);
     const [selectedDevice, setSelectedDevice] = useState<string | null>(outputDevice);
     const [appliedFeedback, setAppliedFeedback] = useState(false);
+    const [testingDevice, setTestingDevice] = useState(false);
+    const [testResult, setTestResult] = useState<WasapiSupportResult | null>(null);
+    const [testError, setTestError] = useState<string | null>(null);
+    const testTimerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (testTimerRef.current !== null) {
+                window.clearTimeout(testTimerRef.current);
+            }
+        };
+    }, []);
 
     if (prevPropDevice !== outputDevice) {
         setPrevPropDevice(outputDevice);
@@ -75,12 +87,12 @@ export default function AudioSection({
     }, [getDevices, installed, lang]);
 
     useEffect(() => {
-        if (!installed || !nativeMode) return;
+        if (!installed) return;
         const timer = window.setTimeout(() => {
             void refreshDevices();
         }, 0);
         return () => window.clearTimeout(timer);
-    }, [installed, nativeMode, refreshDevices]);
+    }, [installed, refreshDevices]);
 
     const selectMode = (value: string) => {
         if (value !== 'html_audio' && value !== 'wasapi_shared' && value !== 'wasapi_exclusive') return;
@@ -102,6 +114,32 @@ export default function AudioSection({
         setOutputDevice(selectedDevice);
         setAppliedFeedback(true);
         window.setTimeout(() => setAppliedFeedback(false), 1800);
+    };
+
+    const handleTestDevice = async () => {
+        if (testTimerRef.current !== null) {
+            window.clearTimeout(testTimerRef.current);
+            testTimerRef.current = null;
+        }
+        setTestingDevice(true);
+        setTestError(null);
+        try {
+            const res = await testDevice(selectedDevice);
+            setTestResult(res);
+            testTimerRef.current = window.setTimeout(() => {
+                setTestResult(null);
+                testTimerRef.current = null;
+            }, 5000);
+        } catch (err) {
+            setTestResult(null);
+            setTestError((err as Error).message || t(lang, 'audio.device.error'));
+            testTimerRef.current = window.setTimeout(() => {
+                setTestError(null);
+                testTimerRef.current = null;
+            }, 5000);
+        } finally {
+            setTestingDevice(false);
+        }
     };
 
     const deviceOptions: [string, string, boolean?][] = [
@@ -160,7 +198,52 @@ export default function AudioSection({
                     />
                 </SettingRow>
                 <div className="px-4 py-3.5 border-b border-zinc-800/40 last:border-0">
-                    <div className="text-sm font-medium text-zinc-100">{t(lang, 'audio.outputDevice.title')}</div>
+                    <div className="flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="text-sm font-medium text-zinc-100">{t(lang, 'audio.outputDevice.title')}</div>
+                        {testingDevice && (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/60 animate-pulse">
+                                <svg className="animate-spin h-3 w-3 text-zinc-400" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>{t(lang, 'audio.device.testing')}</span>
+                            </div>
+                        )}
+                        {!testingDevice && testResult && (
+                            <div
+                                title={testResult.message + (testResult.supportedSampleRates?.length ? ` [${testResult.supportedSampleRates.join(', ')} Hz]` : '')}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${
+                                    testResult.supportedExclusive
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                        : testResult.supportedShared
+                                            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                            : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                }`}
+                            >
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                    testResult.supportedExclusive
+                                        ? 'bg-emerald-400'
+                                        : testResult.supportedShared
+                                            ? 'bg-amber-400'
+                                            : 'bg-rose-400'
+                                }`} />
+                                <span>
+                                    {testResult.exclusiveNotAllowed
+                                        ? `${testResult.deviceName ? `${testResult.deviceName}: ` : ''}${t(lang, 'audio.device.testedExclusiveDisabled')}`
+                                        : testResult.supportedExclusive
+                                            ? `${testResult.deviceName ? `${testResult.deviceName}: ` : ''}${t(lang, 'audio.device.testedExclusiveAndShared')}${testResult.supportedSampleRates && testResult.supportedSampleRates.length > 0 ? ` (${testResult.supportedSampleRates[0] / 1000} - ${testResult.supportedSampleRates[testResult.supportedSampleRates.length - 1] / 1000} kHz)` : ''}`
+                                            : testResult.supportedShared
+                                                ? `${testResult.deviceName ? `${testResult.deviceName}: ` : ''}${t(lang, 'audio.device.testedSharedOnly')}`
+                                                : `${testResult.deviceName ? `${testResult.deviceName}: ` : ''}${t(lang, 'audio.device.testedUnsupported')}`}
+                                </span>
+                            </div>
+                        )}
+                        {!testingDevice && !testResult && testError && (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                                <span>{testError}</span>
+                            </div>
+                        )}
+                    </div>
                     <p className="text-xs text-zinc-500 mt-0.5">{nativeMode ? t(lang, 'audio.outputDevice.desc') : t(lang, 'audio.outputMode.deviceIgnored')}</p>
 
                     <div className="mt-3 space-y-3">
@@ -168,8 +251,16 @@ export default function AudioSection({
                             ariaLabel={t(lang, 'audio.outputDevice.title')}
                             options={deviceOptions}
                             value={selectedDevice || ''}
-                            onChange={(val) => setSelectedDevice(val || null)}
-                            disabled={!installed || !nativeMode}
+                            onChange={(val) => {
+                                setSelectedDevice(val || null);
+                                if (testTimerRef.current !== null) {
+                                    window.clearTimeout(testTimerRef.current);
+                                    testTimerRef.current = null;
+                                }
+                                setTestResult(null);
+                                setTestError(null);
+                            }}
+                            disabled={!installed}
                             accent={accent}
                             accentColor={accentColor}
                             fullWidth
@@ -190,10 +281,28 @@ export default function AudioSection({
                             <button
                                 type="button"
                                 onClick={() => void refreshDevices()}
-                                disabled={!installed || !nativeMode || devicesLoading}
+                                disabled={!installed || devicesLoading}
                                 className="px-4 py-2 rounded-lg border border-zinc-700/60 bg-zinc-800/80 text-xs font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer active:scale-[0.98]"
                             >
                                 {devicesLoading ? t(lang, 'audio.device.refreshing') : t(lang, 'audio.device.refresh')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleTestDevice()}
+                                disabled={testingDevice}
+                                className="px-4 py-2 rounded-lg border border-zinc-700/60 bg-zinc-800/80 text-xs font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer active:scale-[0.98] flex items-center gap-1.5"
+                            >
+                                {testingDevice ? (
+                                    <>
+                                        <svg className="animate-spin h-3.5 w-3.5 text-zinc-300" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>{t(lang, 'audio.device.testing')}</span>
+                                    </>
+                                ) : (
+                                    t(lang, 'audio.device.testWasapi')
+                                )}
                             </button>
                         </div>
                     </div>

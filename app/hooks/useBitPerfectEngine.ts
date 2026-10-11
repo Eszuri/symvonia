@@ -48,6 +48,17 @@ export interface EngineDevice {
     isDefault: boolean;
 }
 
+export interface WasapiSupportResult {
+    deviceName: string;
+    supportedExclusive: boolean;
+    supportedShared: boolean;
+    defaultSampleRate?: number | null;
+    supportedSampleRates: number[];
+    exclusiveNotAllowed: boolean;
+    inUse: boolean;
+    message: string;
+}
+
 interface EngineEventHandlers {
     onState?: (e: EngineStateEvent) => void;
     onProgress?: (e: EngineProgressEvent) => void;
@@ -358,6 +369,16 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
         });
     }, []);
 
+    const testDevice = useCallback(async (deviceId?: string | null): Promise<WasapiSupportResult> => {
+        if (!isBrowserTauri()) {
+            throw new Error("Pengujian perangkat hanya didukung di aplikasi desktop Tauri.");
+        }
+        const mod = await getTauri();
+        return mod.invoke<WasapiSupportResult>("test_wasapi_device", {
+            deviceId: deviceId || null,
+        });
+    }, []);
+
     return {
         status,
         downloading,
@@ -373,5 +394,6 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
         uninstall,
         stopEngine,
         getDevices,
+        testDevice,
     };
 }

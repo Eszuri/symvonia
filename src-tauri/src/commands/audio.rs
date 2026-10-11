@@ -25,6 +25,352 @@ pub async fn get_audio_devices() -> Result<Vec<crate::audio::output::AudioDevice
         .map_err(|e| format!("Audio device enumeration task failed: {}", e))
 }
 
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WasapiSupportResult {
+    pub device_name: String,
+    pub supported_exclusive: bool,
+    pub supported_shared: bool,
+    pub default_sample_rate: Option<u32>,
+    pub supported_sample_rates: Vec<u32>,
+    pub exclusive_not_allowed: bool,
+    pub in_use: bool,
+    pub message: String,
+}
+
+#[cfg(windows)]
+pub fn probe_wasapi_device(device_id: Option<String>) -> Result<WasapiSupportResult, String> {
+    use windows::core::HSTRING;
+    use windows::Win32::Media::Audio::{
+        eMultimedia, eRender, IAudioClient, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
+        AUDCLNT_SHAREMODE_EXCLUSIVE, AUDCLNT_SHAREMODE_SHARED, DEVICE_STATE_ACTIVE,
+        WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
+    };
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_INPROC_SERVER,
+        COINIT_MULTITHREADED, STGM_READ,
+    };
+    use windows::Win32::UI::Shell::PropertiesSystem::PROPERTYKEY;
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(
+            &MMDeviceEnumerator,
+            None,
+            CLSCTX_INPROC_SERVER,
+        )
+        .map_err(|e| format!("Gagal menginisialisasi MMDeviceEnumerator: {}", e))?;
+
+        let pkey_device_friendly_name = PROPERTYKEY {
+            fmtid: windows::core::GUID::from_u128(0xa45c254e_df1c_4efd_8020_67d146a850e0),
+            pid: 14,
+        };
+
+        let mut matched_device: Option<IMMDevice> = None;
+        let mut resolved_name = String::new();
+
+        if let Some(ref target) = device_id {
+            let target_trimmed = target.trim();
+            if !target_trimmed.is_empty() {
+                // 1. Coba cari langsung berdasarkan ID endpoint
+                if let Ok(dev) = enumerator.GetDevice(&HSTRING::from(target_trimmed)) {
+                    if let Ok(store) = dev.OpenPropertyStore(STGM_READ) {
+                        if let Ok(var) = store.GetValue(&pkey_device_friendly_name) {
+                            resolved_name = var.to_string();
+                        }
+                    }
+                    matched_device = Some(dev);
+                }
+
+                // 2. Jika tidak ditemukan lewat ID langsung, cari lewat daftar endpoint aktif
+                // berdasarkan nama friendly atau ID
+                if matched_device.is_none() {
+                    if let Ok(collection) = enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) {
+                        if let Ok(count) = collection.GetCount() {
+                            for i in 0..count {
+                                if let Ok(dev) = collection.Item(i) {
+                                    let mut name = String::new();
+                                    if let Ok(store) = dev.OpenPropertyStore(STGM_READ) {
+                                        if let Ok(var) = store.GetValue(&pkey_device_friendly_name) {
+                                            name = var.to_string();
+                                        }
+                                    }
+                                    let id_str = dev
+                                        .GetId()
+                                        .map(|pwstr| {
+                                            let s = pwstr.to_string().unwrap_or_default();
+                                            CoTaskMemFree(Some(pwstr.as_ptr() as *const _));
+                                            s
+                                        })
+                                        .unwrap_or_default();
+
+                                    if !name.is_empty()
+                                        && (name.eq_ignore_ascii_case(target_trimmed)
+                                            || target_trimmed.contains(&name)
+                                            || name.contains(target_trimmed))
+                                        || (!id_str.is_empty() && id_str == target_trimmed)
+                                    {
+                                        resolved_name = if name.is_empty() {
+                                            target_trimmed.to_string()
+                                        } else {
+                                            name
+                                        };
+                                        matched_device = Some(dev);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback jika tidak ditentukan atau tidak ditemukan: gunakan default multimedia audio endpoint
+        let device = match matched_device {
+            Some(d) => d,
+            None => {
+                let def = enumerator
+                    .GetDefaultAudioEndpoint(eRender, eMultimedia)
+                    .map_err(|e| format!("Perangkat audio default tidak ditemukan: {}", e))?;
+                if resolved_name.is_empty() {
+                    if let Ok(store) = def.OpenPropertyStore(STGM_READ) {
+                        if let Ok(var) = store.GetValue(&pkey_device_friendly_name) {
+                            resolved_name = var.to_string();
+                        }
+                    }
+                    if resolved_name.is_empty() {
+                        resolved_name = "Perangkat Sistem Default".to_string();
+                    }
+                }
+                def
+            }
+        };
+
+        let client: IAudioClient = device
+            .Activate(CLSCTX_INPROC_SERVER, None)
+            .map_err(|e| format!("Gagal mengaktifkan IAudioClient pada {}: {}", resolved_name, e))?;
+
+        // 1. Pengujian Mode Shared
+        let mix_format_ptr = client
+            .GetMixFormat()
+            .map_err(|e| format!("Gagal membaca mix format WASAPI: {}", e))?;
+
+        let mix_format = &*mix_format_ptr;
+        let default_sample_rate = mix_format.nSamplesPerSec;
+
+        let supported_shared = client
+            .IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, mix_format_ptr, None)
+            .is_ok();
+
+        // 2. Pengujian Mode Exclusive
+        let mut supported_exclusive = false;
+        let mut exclusive_not_allowed = false;
+        let mut in_use = false;
+        let mut supported_rates: Vec<u32> = Vec::new();
+
+        // Helper untuk menguji apakah IAudioClient benar-benar bisa diinisialisasi
+        // dalam mode Exclusive pada perangkat ini (bukan sekadar lolos format parsing)
+        let test_exclusive_init = |dev: &IMMDevice, wfx: *const WAVEFORMATEX| -> bool {
+            if let Ok(tc) = dev.Activate::<IAudioClient>(CLSCTX_INPROC_SERVER, None) {
+                let mut def_p: i64 = 0;
+                let mut min_p: i64 = 0;
+                let _ = tc.GetDevicePeriod(Some(&mut def_p), Some(&mut min_p));
+                let period = if min_p > 0 { min_p } else { 500_000 };
+                let init_res = tc.Initialize(
+                    AUDCLNT_SHAREMODE_EXCLUSIVE,
+                    0,
+                    period,
+                    period,
+                    wfx,
+                    None,
+                );
+                match init_res {
+                    Ok(()) => true,
+                    Err(e) => {
+                        let code = e.code().0;
+                        code == -2004287463 || code == -2004287478
+                    }
+                }
+            } else {
+                false
+            }
+        };
+
+        // Cek format native perangkat di mode exclusive
+        let hr = client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, mix_format_ptr, None);
+        if hr.is_ok() && test_exclusive_init(&device, mix_format_ptr) {
+            supported_exclusive = true;
+            supported_rates.push(default_sample_rate);
+        } else {
+            let code = hr.0;
+            if code == -2004287474 { // 0x8889000E AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED
+                exclusive_not_allowed = true;
+            } else if code == -2004287478 { // 0x8889000A AUDCLNT_E_DEVICE_IN_USE
+                in_use = true;
+                supported_exclusive = true;
+            }
+        }
+
+        // Jika exclusive mode tidak dilarang, cek format standar PCM (16-bit, 24-bit, 32-bit float)
+        if !exclusive_not_allowed {
+            let candidate_rates = [44100u32, 48000u32, 88200u32, 96000u32, 176400u32, 192000u32];
+            const KSDATAFORMAT_SUBTYPE_PCM: windows::core::GUID =
+                windows::core::GUID::from_u128(0x00000001_0000_0010_8000_00aa00389b71);
+            const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: windows::core::GUID =
+                windows::core::GUID::from_u128(0x00000003_0000_0010_8000_00aa00389b71);
+
+            for &rate in &candidate_rates {
+                if supported_rates.contains(&rate) {
+                    continue;
+                }
+
+                let mut rate_supported = false;
+
+                // Test 1: 16-bit PCM Stereo
+                let wfx16 = WAVEFORMATEX {
+                    wFormatTag: 1, // WAVE_FORMAT_PCM
+                    nChannels: 2,
+                    nSamplesPerSec: rate,
+                    nAvgBytesPerSec: rate * 4,
+                    nBlockAlign: 4,
+                    wBitsPerSample: 16,
+                    cbSize: 0,
+                };
+                if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, &wfx16, None).is_ok()
+                    && test_exclusive_init(&device, &wfx16)
+                {
+                    rate_supported = true;
+                }
+
+                // Test 2: 24-bit PCM Stereo (Extensible)
+                if !rate_supported {
+                    let wfx24_ext = WAVEFORMATEXTENSIBLE {
+                        Format: WAVEFORMATEX {
+                            wFormatTag: 0xFFFE, // WAVE_FORMAT_EXTENSIBLE
+                            nChannels: 2,
+                            nSamplesPerSec: rate,
+                            nAvgBytesPerSec: rate * 6,
+                            nBlockAlign: 6,
+                            wBitsPerSample: 24,
+                            cbSize: 22,
+                        },
+                        Samples: windows::Win32::Media::Audio::WAVEFORMATEXTENSIBLE_0 {
+                            wValidBitsPerSample: 24,
+                        },
+                        dwChannelMask: 0x3, // SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT
+                        SubFormat: KSDATAFORMAT_SUBTYPE_PCM,
+                    };
+                    let ptr24 = &wfx24_ext as *const _ as *const WAVEFORMATEX;
+                    if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, ptr24, None).is_ok()
+                        && test_exclusive_init(&device, ptr24)
+                    {
+                        rate_supported = true;
+                    }
+                }
+
+                // Test 3: 32-bit Float Stereo
+                if !rate_supported {
+                    let wfx32 = WAVEFORMATEX {
+                        wFormatTag: 3, // WAVE_FORMAT_IEEE_FLOAT
+                        nChannels: 2,
+                        nSamplesPerSec: rate,
+                        nAvgBytesPerSec: rate * 8,
+                        nBlockAlign: 8,
+                        wBitsPerSample: 32,
+                        cbSize: 0,
+                    };
+                    if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, &wfx32, None).is_ok()
+                        && test_exclusive_init(&device, &wfx32)
+                    {
+                        rate_supported = true;
+                    }
+                }
+
+                // Test 4: 32-bit Float Stereo (Extensible)
+                if !rate_supported {
+                    let wfx32_ext = WAVEFORMATEXTENSIBLE {
+                        Format: WAVEFORMATEX {
+                            wFormatTag: 0xFFFE,
+                            nChannels: 2,
+                            nSamplesPerSec: rate,
+                            nAvgBytesPerSec: rate * 8,
+                            nBlockAlign: 8,
+                            wBitsPerSample: 32,
+                            cbSize: 22,
+                        },
+                        Samples: windows::Win32::Media::Audio::WAVEFORMATEXTENSIBLE_0 {
+                            wValidBitsPerSample: 32,
+                        },
+                        dwChannelMask: 0x3,
+                        SubFormat: KSDATAFORMAT_SUBTYPE_IEEE_FLOAT,
+                    };
+                    let ptr32 = &wfx32_ext as *const _ as *const WAVEFORMATEX;
+                    if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, ptr32, None).is_ok()
+                        && test_exclusive_init(&device, ptr32)
+                    {
+                        rate_supported = true;
+                    }
+                }
+
+                if rate_supported {
+                    supported_exclusive = true;
+                    supported_rates.push(rate);
+                }
+            }
+        }
+
+        supported_rates.sort_unstable();
+
+        CoTaskMemFree(Some(mix_format_ptr as *const _));
+
+        let message = if exclusive_not_allowed {
+            "Mode Eksklusif dinonaktifkan di pengaturan Windows untuk perangkat ini (Shared didukung)".to_string()
+        } else if supported_exclusive && supported_shared {
+            "Mendukung WASAPI Exclusive & Shared".to_string()
+        } else if supported_shared && !supported_exclusive {
+            "Hanya mendukung WASAPI Shared (Exclusive tidak didukung oleh perangkat/driver)".to_string()
+        } else if supported_exclusive {
+            "Mendukung WASAPI Exclusive".to_string()
+        } else {
+            "Perangkat tidak mendukung mode WASAPI (Gunakan HTML5 Audio)".to_string()
+        };
+
+        Ok(WasapiSupportResult {
+            device_name: resolved_name,
+            supported_exclusive,
+            supported_shared,
+            default_sample_rate: Some(default_sample_rate),
+            supported_sample_rates: supported_rates,
+            exclusive_not_allowed,
+            in_use,
+            message,
+        })
+    }
+}
+
+#[cfg(not(windows))]
+pub fn probe_wasapi_device(_device_id: Option<String>) -> Result<WasapiSupportResult, String> {
+    Err("WASAPI hanya tersedia di sistem operasi Windows".to_string())
+}
+
+#[tauri::command]
+pub async fn test_wasapi_device(device_id: Option<String>) -> Result<WasapiSupportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || probe_wasapi_device(device_id))
+        .await
+        .map_err(|e| format!("WASAPI test task failed: {}", e))?
+}
+
+
+
+
+
+
+
+
+
+
 #[derive(Serialize)]
 pub struct FileEntry {
     pub name: String,

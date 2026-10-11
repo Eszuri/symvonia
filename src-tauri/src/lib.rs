@@ -164,8 +164,10 @@ pub fn run() {
             uninstall_bit_perfect_plugin,
             send_audio_command,
             get_audio_devices,
+            test_wasapi_device,
             stop_audio_engine,
             is_audio_engine_running,
+
             get_ai_lyrics_plugin_status,
             download_ai_lyrics_plugin,
             cancel_ai_lyrics_plugin_download,
