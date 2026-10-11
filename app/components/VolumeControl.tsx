@@ -1,10 +1,10 @@
 'use client';
 
-import React, {memo, useEffect, useRef} from 'react';
-import {getAccent} from '../lib/colors';
-import {t, type Lang} from '../lib/translations';
-import {useHoverDescription} from '../hooks/useHoverDescription';
-import {VolumeMuteIcon, VolumeLowIcon, VolumeHighIcon, MinusIcon, PlusIcon, ResetIcon} from './icons';
+import React, { memo, useEffect, useRef } from 'react';
+import { getAccent } from '../lib/colors';
+import { t, type Lang } from '../lib/translations';
+import { useHoverDescription } from '../hooks/useHoverDescription';
+import { VolumeMuteIcon, VolumeLowIcon, VolumeHighIcon, MinusIcon, PlusIcon, ResetIcon } from './icons';
 
 interface VolumeControlProps {
     lang: Lang;
@@ -20,14 +20,14 @@ interface VolumeControlProps {
     disabled?: boolean;
 }
 
-function VolumeIcon({muted, low}: {muted: boolean; low: boolean}) {
+function VolumeIcon({ muted, low }: { muted: boolean; low: boolean }) {
     if (muted) return <VolumeMuteIcon size={18} />;
     if (low) return <VolumeLowIcon size={18} />;
     return <VolumeHighIcon size={18} />;
 }
 
 function makeChangeEvent(value: number): React.ChangeEvent<HTMLInputElement> {
-    return {target: {value: String(value)}} as React.ChangeEvent<HTMLInputElement>;
+    return { target: { value: String(value) } } as React.ChangeEvent<HTMLInputElement>;
 }
 
 function VolumeControl({
@@ -159,89 +159,95 @@ function VolumeControl({
     const volumeHover = useHoverDescription(t(lang, 'status.volume'));
 
     return (
-        <div className="flex items-center gap-2 w-full justify-center">
+        <div className="flex flex-col items-center w-full justify-center">
+            <div className="flex items-center gap-2 w-full justify-center">
                 <button
-            {...muteHover}
-            onClick={toggleMute}
-            disabled={controlDisabled}
-                className="text-white/80 hover:text-white cursor-pointer flex items-center justify-center w-7 h-7 shrink-0"
-            >
-                <VolumeIcon muted={muted} low={low} />
-            </button>
+                    {...muteHover}
+                    onClick={toggleMute}
+                    disabled={controlDisabled}
+                    className="text-white/80 hover:text-white cursor-pointer flex items-center justify-center w-7 h-7 shrink-0"
+                >
+                    <VolumeIcon muted={muted} low={low} />
+                </button>
 
-            <button
-                {...volumeHover}
-                onClick={() => onStepButton('down')}
-                disabled={controlDisabled || isDecreaseDisabled}
-                className={decreaseBtnClass}
-                title={isDecreaseDisabled ? t(lang, 'volume.decreaseDisabled') : t(lang, 'volume.decrease')}
-            >
-                <MinusIcon size={12} />
-            </button>
+                <button
+                    {...volumeHover}
+                    onClick={() => onStepButton('down')}
+                    disabled={controlDisabled || isDecreaseDisabled}
+                    className={decreaseBtnClass}
+                    title={isDecreaseDisabled ? t(lang, 'volume.decreaseDisabled') : t(lang, 'volume.decrease')}
+                >
+                    <MinusIcon size={12} />
+                </button>
 
-            <div
-                {...volumeHover}
-                className="relative flex-1 min-w-14 max-w-40 h-5 flex items-center">
-                <div className="absolute inset-x-0 h-1 rounded-full bg-zinc-800/80" />
-                {showSlider && (
-                    <>
-                        <div
-                            className="absolute h-1 rounded-full transition-all duration-75"
-                            style={{
-                                width: isSystem && sliderMax > 0 ? `${(visualPct / sliderMax) * 100}%` : `${visualPct}%`,
-                                background: isSliderDisabled
-                                    ? '#52525b'
-                                    : `linear-gradient(90deg, ${accent.hex500}, ${accent.hex400})`,
-                            }}
-                        />
-                        <div
-                            className="absolute w-2.5 h-2.5 rounded-full pointer-events-none"
-                            style={{
-                                left: isSystem && sliderMax > 0
-                                    ? `calc(${(visualPct / sliderMax) * 100}% - 5px)`
-                                    : `calc(${visualPct}% - 5px)`,
-                                backgroundColor: isSliderDisabled ? '#71717a' : accent.hex400,
-                                boxShadow: isSliderDisabled ? 'none' : `0 0 0 2px ${accent.hex500}20`,
-                            }}
-                        />
-                    </>
+                <div
+                    {...volumeHover}
+                    className="relative flex-1 min-w-14 max-w-40 h-5 flex items-center">
+                    <div className="absolute inset-x-0 h-1 rounded-full bg-zinc-800/80" />
+                    {showSlider && (
+                        <>
+                            <div
+                                className="absolute h-1 rounded-full transition-all duration-75"
+                                style={{
+                                    width: isSystem && sliderMax > 0 ? `${(visualPct / sliderMax) * 100}%` : `${visualPct}%`,
+                                    background: isSliderDisabled
+                                        ? '#52525b'
+                                        : `linear-gradient(90deg, ${accent.hex500}, ${accent.hex400})`,
+                                }}
+                            />
+                            <div
+                                className="absolute w-2.5 h-2.5 rounded-full pointer-events-none"
+                                style={{
+                                    left: isSystem && sliderMax > 0
+                                        ? `calc(${(visualPct / sliderMax) * 100}% - 5px)`
+                                        : `calc(${visualPct}% - 5px)`,
+                                    backgroundColor: isSliderDisabled ? '#71717a' : accent.hex400,
+                                    boxShadow: isSliderDisabled ? 'none' : `0 0 0 2px ${accent.hex500}20`,
+                                }}
+                            />
+                        </>
+                    )}
+                    <input
+                        type="range"
+                        min="0"
+                        max={isSystem ? String(sliderMax) : "1"}
+                        step={isSystem ? "1" : "0.01"}
+                        disabled={controlDisabled || isSliderDisabled}
+                        value={showSlider ? (isSystem ? visualPct : volume) : 0}
+                        onChange={onSliderChange}
+                        className={`absolute inset-0 w-full h-full opacity-0 z-10 ${isSliderDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                            }`}
+                    />
+                </div>
+
+                {showResetButton ? (
+                    <button
+                        {...volumeHover}
+                        onClick={onResetToLimit}
+                        className="w-5 h-5 ml-3 -mr-3 flex items-center justify-center rounded text-amber-300 hover:text-amber-100 bg-amber-950/80 hover:bg-amber-900/90 border border-amber-600/60 cursor-pointer transition-colors shadow-xs"
+                        title={t(lang, 'volume.resetToLimit', { limit })}
+                    >
+                        <ResetIcon size={12} />
+                    </button>
+                ) : (
+                    <button
+                        {...volumeHover}
+                        onClick={() => onStepButton('up')}
+                        disabled={isIncreaseDisabled}
+                        className={increaseBtnClass}
+                        title={isIncreaseDisabled ? t(lang, 'volume.increaseDisabled') : t(lang, 'volume.increase')}
+                    >
+                        <PlusIcon size={12} />
+                    </button>
                 )}
-                <input
-                    type="range"
-                    min="0"
-                    max={isSystem ? String(sliderMax) : "1"}
-                    step={isSystem ? "1" : "0.01"}
-                    disabled={controlDisabled || isSliderDisabled}
-                    value={showSlider ? (isSystem ? visualPct : volume) : 0}
-                    onChange={onSliderChange}
-                    className={`absolute inset-0 w-full h-full opacity-0 z-10 ${isSliderDisabled ? "cursor-not-allowed" : "cursor-pointer"
-                        }`}
-                />
+
+                <span className="text-[11px] tabular-nums text-right text-white/50 font-medium min-w-9">
+                    {label}
+                </span>
             </div>
 
-            {showResetButton ? (
-                <button
-                    {...volumeHover}
-                    onClick={onResetToLimit}
-                    className="w-5 h-5 ml-3 -mr-3 flex items-center justify-center rounded text-amber-300 hover:text-amber-100 bg-amber-950/80 hover:bg-amber-900/90 border border-amber-600/60 cursor-pointer transition-colors shadow-xs"
-                    title={t(lang, 'volume.resetToLimit', {limit})}
-                >
-                    <ResetIcon size={12} />
-                </button>
-            ) : (
-                <button
-                    {...volumeHover}
-                    onClick={() => onStepButton('up')}
-                    disabled={isIncreaseDisabled}
-                    className={increaseBtnClass}
-                    title={isIncreaseDisabled ? t(lang, 'volume.increaseDisabled') : t(lang, 'volume.increase')}
-                >
-                    <PlusIcon size={12} />
-                </button>
-            )}
-
-            <span className="text-[11px] tabular-nums text-right text-white/50 font-medium min-w-9">
-                {label}
+            <span className="text-[10px] text-zinc-300 font-medium tracking-tight -mt-1.5 leading-none select-none text-center">
+                {t(lang, isSystem ? 'general.volumeMode.system' : 'general.volumeMode.app')}
             </span>
         </div>
     );
