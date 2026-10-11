@@ -95,6 +95,14 @@ pub fn run() {
             }
         }))
         .setup(|app| {
+            if cfg!(debug_assertions) {
+                let _ = app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                );
+            }
+
             let handle = app.handle();
             let _ = migration::migrate_legacy_plugins(handle);
             let initial_config = commands::config::load_config(handle);
@@ -103,6 +111,14 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let script = format!("window.__SYMVONIA_INITIAL_CONFIG__ = {};", json_str);
                 let _ = window.eval(&script);
+
+                let icon_bytes = include_bytes!("../icons/icon.png");
+                if let Ok(img) = image::load_from_memory(icon_bytes) {
+                    let img = img.to_rgba8();
+                    let (w, h) = (img.width(), img.height());
+                    let icon = tauri::image::Image::new(img.as_raw(), w, h);
+                    let _ = window.set_icon(icon);
+                }
             }
 
             // Auto-start Direct3D 11 Wallpaper Engine if enabled and installed
@@ -126,6 +142,66 @@ pub fn run() {
                 let _ = commands::system::register_volume_callback(handle.clone());
             }
 
+            // System Tray Setup
+            let show_text = if initial_config.language == "id" { "Buka Symvonia" } else { "Open Symvonia" };
+            let quit_text = if initial_config.language == "id" { "Keluar" } else { "Exit" };
+
+            let show_item = tauri::menu::MenuItem::with_id(handle, "show", show_text, true, None::<&str>)?;
+            let quit_item = tauri::menu::MenuItem::with_id(handle, "quit", quit_text, true, None::<&str>)?;
+            let tray_menu = tauri::menu::Menu::with_items(handle, &[&show_item, &quit_item])?;
+
+            let mut tray_builder = tauri::tray::TrayIconBuilder::new()
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .tooltip("Symvonia")
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            let is_minimized = window.is_minimized().unwrap_or(false);
+                            if is_visible && !is_minimized {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                });
+
+            let icon_rgba = image::load_from_memory(include_bytes!("../icons/32x32.png"))
+                .map_err(|e| format!("Failed to decode tray icon: {}", e))?
+                .to_rgba8();
+            let (width, height) = icon_rgba.dimensions();
+            let icon = tauri::image::Image::new_owned(icon_rgba.into_raw(), width, height);
+
+            tray_builder = tray_builder.icon(icon);
+
+            let tray = tray_builder.build(app)?;
+            app.manage(tray);
+
             Ok(())
         })
         .on_page_load(|window, _payload| {
@@ -138,9 +214,18 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     let app = window.app_handle();
-                    app.exit(0);
+                    let config = commands::config::load_config(app);
+                    if config.close_app_action == "tray" {
+                        api.prevent_close();
+                        let _ = window.hide();
+                        if let Some(overlay) = app.get_webview_window("media-overlay") {
+                            let _ = overlay.hide();
+                        }
+                    } else {
+                        app.exit(0);
+                    }
                 }
             }
         })
@@ -375,25 +460,6 @@ pub fn run() {
                 .unwrap()
         })
         .plugin(tauri_plugin_updater::Builder::default().build())
-        .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-            if let Some(window) = app.get_webview_window("main") {
-                let icon_bytes = include_bytes!("../icons/icon.png");
-                if let Ok(img) = image::load_from_memory(icon_bytes) {
-                    let img = img.to_rgba8();
-                    let (w, h) = (img.width(), img.height());
-                    let icon = tauri::image::Image::new(img.as_raw(), w, h);
-                    let _ = window.set_icon(icon);
-                }
-            }
-            Ok(())
-        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 

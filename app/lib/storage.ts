@@ -52,6 +52,7 @@ export function normalizeOutputMode(value: unknown): OutputMode {
 export type OverlayPosition = 'top_left' | 'top_center' | 'top_right' | 'bottom_left' | 'bottom_center' | 'bottom_right';
 export type OverlayBgColor = 'default' | 'black' | 'charcoal' | 'slate' | 'accent' | 'custom';
 export type OverlaySize = 's' | 'm' | 'l' | 'xl';
+export type CloseAppAction = 'tray' | 'exit';
 
 export interface SymvoniaConfig {
     music_folder: string | null;
@@ -106,6 +107,7 @@ export interface SymvoniaConfig {
     overlay_size: OverlaySize;
     overlay_timeout: number;
     overlay_enabled: boolean;
+    close_app_action: CloseAppAction;
 }
 
 const DEFAULT_CONFIG: SymvoniaConfig = {
@@ -184,6 +186,7 @@ const DEFAULT_CONFIG: SymvoniaConfig = {
     overlay_size: 'm',
     overlay_timeout: 2500,
     overlay_enabled: false,
+    close_app_action: 'exit',
 };
 
 // Global in-memory configuration cache

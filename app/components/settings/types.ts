@@ -1,6 +1,6 @@
 import type {LogEntry} from '../../types/log';
 import type {Lang} from '../../lib/translations';
-import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition, OverlayPosition, OverlayBgColor, OverlaySize} from '../../lib/storage';
+import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition, OverlayPosition, OverlayBgColor, OverlaySize, CloseAppAction} from '../../lib/storage';
 import type {PlaybackRuntimeInfo} from '../../hooks/audio/playbackTypes';
 
 export type SectionId = 'general' | 'storage' | 'sort' | 'shortcut' | 'style' | 'plugin' | 'audio' | 'lyrics' | 'wallpaper' | 'changelog' | 'about' | 'debug';
@@ -17,6 +17,8 @@ export interface SettingsModalProps {
     setAutoWallpaper: (v: boolean) => void;
     resetOnClose: boolean;
     setResetOnClose: (v: boolean) => void;
+    closeAppAction?: CloseAppAction;
+    setCloseAppAction?: (v: CloseAppAction) => void;
     volumeMode: string;
     setVolumeMode: (v: string) => void;
     volumeStep: number;

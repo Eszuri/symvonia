@@ -19,6 +19,7 @@ import {
     type OverlayPosition,
     type OverlayBgColor,
     type OverlaySize,
+    type CloseAppAction,
 } from '../lib/storage';
 import type {Lang} from '../lib/translations';
 
@@ -29,6 +30,9 @@ export function usePlayerSettings() {
     const initialized = true;
     const [autoWallpaper, setAutoWallpaperStateInternal] = useState(init.auto_wallpaper);
     const [resetOnClose, setResetOnCloseStateInternal] = useState(init.reset_on_close);
+    const [closeAppAction, setCloseAppActionStateInternal] = useState<CloseAppAction>(
+        init.close_app_action ?? 'exit'
+    );
     const [wallpaperFitMode, setWallpaperFitModeStateInternal] = useState<WallpaperFitMode>(
         init.wallpaper_fit_mode ?? 'fill'
     );
@@ -142,6 +146,11 @@ export function usePlayerSettings() {
         if (isBrowserTauri()) {
             getTauri().then(mod => mod.invoke('set_reset_on_close', {enabled: v})).catch(() => {});
         }
+    }, []);
+
+    const setCloseAppActionState = useCallback((v: CloseAppAction) => {
+        setCloseAppActionStateInternal(v);
+        setStoredValue('close_app_action', v);
     }, []);
 
     const setWallpaperFitMode = useCallback((v: WallpaperFitMode) => {
@@ -295,6 +304,7 @@ export function usePlayerSettings() {
             if (backendConfig.layout_mode) setLayoutModeStateInternal(backendConfig.layout_mode as 'default' | 'spotify');
             if (backendConfig.auto_wallpaper !== undefined) setAutoWallpaperStateInternal(backendConfig.auto_wallpaper);
             if (backendConfig.reset_on_close !== undefined) setResetOnCloseStateInternal(backendConfig.reset_on_close);
+            if (backendConfig.close_app_action !== undefined) setCloseAppActionStateInternal(backendConfig.close_app_action as CloseAppAction);
             if (backendConfig.folder_sort) setFolderSortStateInternal(backendConfig.folder_sort);
             if (backendConfig.file_sort) setFileSortStateInternal(backendConfig.file_sort);
             if (backendConfig.sort_dir) setSortDirStateInternal(backendConfig.sort_dir);
@@ -594,6 +604,8 @@ export function usePlayerSettings() {
         setAutoWallpaperState,
         resetOnClose,
         setResetOnCloseState,
+        closeAppAction,
+        setCloseAppActionState,
         folderSort,
         setFolderSortState,
         fileSort,

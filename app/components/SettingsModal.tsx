@@ -35,6 +35,8 @@ export default function SettingsModal({
     setAutoWallpaper,
     resetOnClose,
     setResetOnClose,
+    closeAppAction,
+    setCloseAppAction,
     volumeStep,
     setVolumeStep,
     volumeMode,
@@ -219,6 +221,8 @@ export default function SettingsModal({
                                         setAutoWallpaper={setAutoWallpaper}
                                         resetOnClose={resetOnClose}
                                         setResetOnClose={setResetOnClose}
+                                        closeAppAction={closeAppAction}
+                                        setCloseAppAction={setCloseAppAction}
                                         volumeStep={volumeStep}
                                         setVolumeStep={setVolumeStep}
                                         volumeMode={volumeMode}

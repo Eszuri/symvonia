@@ -13,7 +13,7 @@ extern "system" {
     fn SystemParametersInfoW(
         uiAction: u32,
         uiParam: u32,
-        pvParam: *const u16,
+        pvParam: *mut std::ffi::c_void,
         fWinIni: u32,
     ) -> i32;
 }
@@ -242,7 +242,7 @@ pub fn apply_wallpaper(bmp_path: &Path) -> Result<(), String> {
         SystemParametersInfoW(
             SPI_SETDESKWALLPAPER,
             0,
-            path_wide.as_ptr(),
+            path_wide.as_ptr() as *mut std::ffi::c_void,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE,
         )
     };

@@ -155,6 +155,11 @@ const en: Record<string, string> = {
     'general.folderMusic.changeBtn': 'Change',
     'general.folderMusic.setBtn': 'Set Folder',
 
+    'general.closeAppAction.title': 'Close Button Action',
+    'general.closeAppAction.desc': 'Choose whether closing the app minimizes to the system tray or exits completely',
+    'general.closeAppAction.tray': 'Minimize to Tray Icon',
+    'general.closeAppAction.exit': 'Exit App Directly',
+
     'general.autoWallpaper.title': 'Auto Wallpaper',
     'general.autoWallpaper.desc': 'Use cover art as desktop wallpaper while playing',
 
@@ -1108,6 +1113,11 @@ const id: Record<string, string> = {
     'general.folderMusic.desc': 'Folder tempat koleksi musik kamu disimpan',
     'general.folderMusic.changeBtn': 'Ganti',
     'general.folderMusic.setBtn': 'Set Folder',
+
+    'general.closeAppAction.title': 'Aksi Saat Menutup Aplikasi',
+    'general.closeAppAction.desc': 'Pilih apakah aplikasi diminimalkan ke tray icon atau keluar langsung',
+    'general.closeAppAction.tray': 'Minimize ke Tray Icon',
+    'general.closeAppAction.exit': 'Keluar Langsung',
 
     'general.autoWallpaper.title': 'Auto Wallpaper',
     'general.autoWallpaper.desc': 'Gunakan cover art sebagai wallpaper desktop saat lagu diputar',

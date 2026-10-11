@@ -7,7 +7,7 @@ import {getAccent} from '../../lib/colors';
 import {t, type Lang} from '../../lib/translations';
 import {SelectStub, SettingGroup, SettingRow, ToggleStub} from './controls';
 import {useHoverDescription} from '../../hooks/useHoverDescription';
-import type {OutputMode, WallpaperFitMode, OverlayPosition, OverlayBgColor, OverlaySize} from '../../lib/storage';
+import type {OutputMode, WallpaperFitMode, OverlayPosition, OverlayBgColor, OverlaySize, CloseAppAction} from '../../lib/storage';
 
 export default function GeneralSection({
     lang,
@@ -17,6 +17,8 @@ export default function GeneralSection({
     setAutoWallpaper,
     resetOnClose,
     setResetOnClose,
+    closeAppAction = 'exit',
+    setCloseAppAction,
     setLang,
     volumeStep,
     setVolumeStep,
@@ -67,6 +69,8 @@ export default function GeneralSection({
     setAutoWallpaper: (v: boolean) => void;
     resetOnClose: boolean;
     setResetOnClose: (v: boolean) => void;
+    closeAppAction?: CloseAppAction;
+    setCloseAppAction?: (v: CloseAppAction) => void;
     volumeStep: number;
     setVolumeStep: (v: number) => void;
     volumeMode: string;
@@ -151,6 +155,21 @@ export default function GeneralSection({
                             {musicFolder ? t(lang, 'general.folderMusic.changeBtn') : t(lang, 'general.folderMusic.setBtn')}
                         </button>
                     </div>
+                </SettingRow>
+                <SettingRow
+                    title={t(lang, 'general.closeAppAction.title')}
+                    description={t(lang, 'general.closeAppAction.desc')}
+                >
+                    <SelectStub
+                        options={[
+                            ['tray', t(lang, 'general.closeAppAction.tray')],
+                            ['exit', t(lang, 'general.closeAppAction.exit')],
+                        ]}
+                        value={closeAppAction}
+                        onChange={(v) => setCloseAppAction?.(v as CloseAppAction)}
+                        accent={accent}
+                        accentColor={accentColor}
+                    />
                 </SettingRow>
             </SettingGroup>
 

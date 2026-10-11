@@ -584,6 +584,8 @@ function HomeContent() {
                 setAutoWallpaper={settings.setAutoWallpaperState}
                 resetOnClose={settings.resetOnClose}
                 setResetOnClose={settings.setResetOnCloseState}
+                closeAppAction={settings.closeAppAction}
+                setCloseAppAction={settings.setCloseAppActionState}
                 volumeStep={settings.volumeStep}
                 setVolumeStep={settings.setVolumeStep}
                 volumeMode={settings.volumeMode}

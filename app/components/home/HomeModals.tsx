@@ -5,7 +5,7 @@ import SettingsModal from '../SettingsModal';
 import StreamingModal from '../StreamingModal';
 import type {LogEntry} from '../../types/log';
 import {t, type Lang} from '../../lib/translations';
-import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition, OverlayPosition, OverlayBgColor, OverlaySize} from '../../lib/storage';
+import type {OutputMode, WallpaperFitMode, WallpaperEffect, WallpaperTransition, OverlayPosition, OverlayBgColor, OverlaySize, CloseAppAction} from '../../lib/storage';
 import type {PlaybackRuntimeInfo} from '../../hooks/audio/playbackTypes';
 
 interface HomeModalsProps {
@@ -23,6 +23,8 @@ interface HomeModalsProps {
     setAutoWallpaper: (v: boolean) => void;
     resetOnClose: boolean;
     setResetOnClose: (v: boolean) => void;
+    closeAppAction?: CloseAppAction;
+    setCloseAppAction?: (v: CloseAppAction) => void;
     volumeStep: number;
     setVolumeStep: (v: number) => void;
     volumeMode: string;
@@ -112,6 +114,8 @@ export default function HomeModals({
     setAutoWallpaper,
     resetOnClose,
     setResetOnClose,
+    closeAppAction,
+    setCloseAppAction,
     volumeStep,
     setVolumeStep,
     volumeMode,
@@ -212,6 +216,8 @@ export default function HomeModals({
                 setAutoWallpaper={setAutoWallpaper}
                 resetOnClose={resetOnClose}
                 setResetOnClose={setResetOnClose}
+                closeAppAction={closeAppAction}
+                setCloseAppAction={setCloseAppAction}
                 volumeStep={volumeStep}
                 setVolumeStep={setVolumeStep}
                 volumeMode={volumeMode}

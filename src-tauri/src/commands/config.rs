@@ -102,6 +102,12 @@ pub struct SymvoniaConfig {
     pub overlay_timeout: u32,
     #[serde(default = "default_overlay_enabled")]
     pub overlay_enabled: bool,
+    #[serde(default = "default_close_app_action")]
+    pub close_app_action: String,
+}
+
+fn default_close_app_action() -> String {
+    "exit".to_string()
 }
 
 fn default_overlay_enabled() -> bool {
@@ -220,6 +226,7 @@ impl Default for SymvoniaConfig {
             overlay_size: "m".to_string(),
             overlay_timeout: 2500,
             overlay_enabled: false,
+            close_app_action: "exit".to_string(),
         }
     }
 }
@@ -355,6 +362,9 @@ impl SymvoniaConfig {
             self.overlay_size = "m".to_string();
         }
         self.overlay_timeout = (self.overlay_timeout / 500).clamp(1, 60) * 500;
+        if self.close_app_action != "tray" && self.close_app_action != "exit" {
+            self.close_app_action = "exit".to_string();
+        }
     }
 }
 
