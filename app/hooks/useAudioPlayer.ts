@@ -240,6 +240,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
     // Sub-hook: Audio Effects & DSP
     const {fadeVolumeTo, cancelFade, fadeAudioRef, fadeDurationRef} = useVolumeFade(audioRef, fadeAudio, fadeDuration);
+    const isFadingOutRef = useRef(false);
     const {getAudioSrc} = useAudioSrc();
     const equalizer = useEqualizer();
     const {
@@ -430,6 +431,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
     const resetPlayer = useCallback(() => {
         cancelFade();
+        isFadingOutRef.current = false;
         playbackGenerationRef.current += 1;
         metadataRequestRef.current += 1;
         activeNativeRequestRef.current = null;
@@ -533,6 +535,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
         try {
             cancelFade();
+            isFadingOutRef.current = false;
             audio.src = getAudioSrc(song.path);
             audio.loop = repeatRef.current === "one";
             audio.volume = volumeModeRef.current === "app" ? appVolume : 1;
@@ -591,6 +594,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             }
 
             cancelFade();
+            isFadingOutRef.current = false;
             const fileFolder = file.path.replace(/[/\\][^/\\]+$/, "");
             if (fileFolder !== playlistFolderRef.current) {
                 playlistRef.current = filesRef.current.filter((f) => !f.is_dir);
@@ -749,8 +753,10 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
         cancelFade();
 
-        if (audio.paused || !isPlaying) {
+        if (audio.paused || !isPlaying || isFadingOutRef.current) {
+            isFadingOutRef.current = false;
             setIsPlaying(true);
+            setRuntimeStatus('playing');
             const resume = async () => {
                 let resumeVolume: number | null = null;
                 if (pauseIfMuted && isVolumeSilent()) {
@@ -758,14 +764,18 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 }
                 const targetVol = volumeModeRef.current === "app" ? (resumeVolume ?? appVolume) : 1;
                 if (fadeAudioRef.current && fadeDurationRef.current > 0) {
-                    audio.volume = 0;
-                    prepareAudio();
-                    await audio.play();
+                    if (audio.paused) {
+                        audio.volume = 0;
+                        prepareAudio();
+                        await audio.play();
+                    }
                     fadeVolumeTo(targetVol, fadeDurationRef.current);
                 } else {
                     audio.volume = targetVol;
-                    prepareAudio();
-                    await audio.play();
+                    if (audio.paused) {
+                        prepareAudio();
+                        await audio.play();
+                    }
                 }
                 autoPausedBySilenceRef.current = false;
 
@@ -778,14 +788,18 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             resume().catch(() => {});
         } else {
             autoPausedBySilenceRef.current = false;
+            isFadingOutRef.current = true;
             setIsPlaying(false);
+            setRuntimeStatus('paused');
             const targetVol = volumeModeRef.current === "app" ? appVolume : 1;
             if (fadeAudioRef.current && fadeDurationRef.current > 0) {
                 fadeVolumeTo(0, fadeDurationRef.current, () => {
+                    isFadingOutRef.current = false;
                     audio.pause();
                     audio.volume = targetVol;
                 });
             } else {
+                isFadingOutRef.current = false;
                 audio.pause();
             }
         }
@@ -1102,6 +1116,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         const isHtmlPlaybackActive = () => !nativeEngineActiveRef.current && outputModeRef.current === 'html_audio';
         const handlePlay = () => {
             if (!isHtmlPlaybackActive()) return;
+            if (isFadingOutRef.current) return;
             setRuntimeStatus('playing');
             setEffectiveOutputMode('html_audio');
             setRuntimeError(null);
@@ -1109,6 +1124,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         };
         const handlePause = () => {
             if (!isHtmlPlaybackActive()) return;
+            isFadingOutRef.current = false;
             setRuntimeStatus('paused');
             setIsPlaying(false);
             const song = selectedSongRef.current;
@@ -1125,10 +1141,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             if (!isHtmlPlaybackActive()) return;
             const t = audio.currentTime;
             setCurrentTime(t);
-            if (!audio.paused) {
-                setIsPlaying(true);
-                setRuntimeStatus('playing');
-            }
             const song = selectedSongRef.current;
             if (song && t > 0) {
                 const now = Date.now();
@@ -1150,6 +1162,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
         const handleEnded = () => {
             if (!isHtmlPlaybackActive()) return;
+            isFadingOutRef.current = false;
             saveSessionState(null, true);
             playNextRef.current();
         };
