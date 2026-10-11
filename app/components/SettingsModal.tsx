@@ -55,6 +55,10 @@ export default function SettingsModal({
     setOverlayCustomBgHex,
     overlaySize,
     setOverlaySize,
+    overlayTimeout,
+    setOverlayTimeout,
+    overlayEnabled,
+    setOverlayEnabled,
     onPreviewOverlay,
     volume,
     defaultWallpaper,
@@ -235,6 +239,10 @@ export default function SettingsModal({
                                         setOverlayCustomBgHex={setOverlayCustomBgHex}
                                         overlaySize={overlaySize}
                                         setOverlaySize={setOverlaySize}
+                                        overlayTimeout={overlayTimeout}
+                                        setOverlayTimeout={setOverlayTimeout}
+                                        overlayEnabled={overlayEnabled}
+                                        setOverlayEnabled={setOverlayEnabled}
                                         onPreviewOverlay={onPreviewOverlay}
                                         volume={volume}
                                         defaultWallpaper={defaultWallpaper}

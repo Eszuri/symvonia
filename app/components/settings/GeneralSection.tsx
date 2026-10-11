@@ -38,6 +38,10 @@ export default function GeneralSection({
     setOverlayCustomBgHex,
     overlaySize = 'm',
     setOverlaySize,
+    overlayTimeout = 2500,
+    setOverlayTimeout,
+    overlayEnabled = false,
+    setOverlayEnabled,
     onPreviewOverlay,
     volume,
     defaultWallpaper,
@@ -83,6 +87,10 @@ export default function GeneralSection({
     setOverlayCustomBgHex?: (v: string) => void;
     overlaySize?: OverlaySize;
     setOverlaySize?: (v: OverlaySize) => void;
+    overlayTimeout?: number;
+    setOverlayTimeout?: (v: number) => void;
+    overlayEnabled?: boolean;
+    setOverlayEnabled?: (v: boolean) => void;
     onPreviewOverlay?: () => void;
     volume: number;
     defaultWallpaper: string | null;
@@ -339,6 +347,17 @@ export default function GeneralSection({
 
             <SettingGroup title={t(lang, 'general.group.overlay')}>
                 <SettingRow
+                    title={t(lang, 'general.overlayEnable.title')}
+                    description={t(lang, 'general.overlayEnable.desc')}
+                >
+                    <ToggleStub
+                        checked={overlayEnabled}
+                        onChange={setOverlayEnabled ?? (() => {})}
+                        accent={accent}
+                    />
+                </SettingRow>
+
+                <SettingRow
                     title={t(lang, 'general.overlayPosition.title')}
                     description={t(lang, 'general.overlayPosition.desc')}
                 >
@@ -407,6 +426,26 @@ export default function GeneralSection({
                             </div>
                         )}
                     </div>
+                </SettingRow>
+
+                <SettingRow
+                    title={t(lang, 'general.overlayTimeout.title')}
+                    description={t(lang, 'general.overlayTimeout.desc')}
+                >
+                    <SelectStub
+                        options={[
+                            500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000,
+                            5500, 6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500, 10000,
+                        ].map((ms) => {
+                            const s = (ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1);
+                            const suffix = ms === 2500 ? ` (${s}s - ${lang === 'id' ? 'Bawaan' : 'Default'})` : ` (${s}s)`;
+                            return [String(ms), `${ms} ms${suffix}`];
+                        })}
+                        value={String(overlayTimeout)}
+                        onChange={(v) => setOverlayTimeout?.(parseInt(v, 10))}
+                        accent={accent}
+                        accentColor={accentColor}
+                    />
                 </SettingRow>
 
                 {onPreviewOverlay && (

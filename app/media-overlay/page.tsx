@@ -159,11 +159,15 @@ export default function MediaOverlayPage() {
     const [overlaySize, setOverlaySize] = useState<'s' | 'm' | 'l' | 'xl'>('m');
     const [overlayBgColor, setOverlayBgColor] = useState<string>('default');
     const [overlayCustomBgHex, setOverlayCustomBgHex] = useState<string>('#09090b');
+    const [overlayTimeout, setOverlayTimeout] = useState<number>(2500);
+    const [overlayEnabled, setOverlayEnabled] = useState<boolean>(false);
 
     const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
     const animTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isHoveredRef = useRef<boolean>(false);
     const isVisibleRef = useRef<boolean>(false);
+    const overlayTimeoutRef = useRef<number>(2500);
+    const overlayEnabledRef = useRef<boolean>(false);
     const lastSyncTimeRef = useRef<{time: number; timestamp: number}>({time: 0, timestamp: Date.now()});
 
     const loadOverlayConfig = useCallback(async () => {
@@ -174,17 +178,34 @@ export default function MediaOverlayPage() {
                 if (cfg.overlay_size) setOverlaySize(cfg.overlay_size);
                 if (cfg.overlay_bg_color) setOverlayBgColor(cfg.overlay_bg_color);
                 if (cfg.overlay_custom_bg_hex) setOverlayCustomBgHex(cfg.overlay_custom_bg_hex);
+                if (typeof cfg.overlay_timeout === 'number' && cfg.overlay_timeout >= 500) {
+                    setOverlayTimeout(cfg.overlay_timeout);
+                    overlayTimeoutRef.current = cfg.overlay_timeout;
+                }
+                if (typeof cfg.overlay_enabled === 'boolean') {
+                    setOverlayEnabled(cfg.overlay_enabled);
+                    overlayEnabledRef.current = cfg.overlay_enabled;
+                }
                 if (cfg.accent_color) setAccentColor(cfg.accent_color);
             }
         } catch {}
     }, []);
 
-    // Make body and html transparent for frameless native overlay window
+    // Make body and html transparent for frameless native overlay window and disable context menu
     useEffect(() => {
         document.documentElement.style.background = 'transparent';
         document.body.style.background = 'transparent';
         document.body.style.overflow = 'hidden';
+
+        const preventContextMenu = (e: MouseEvent) => {
+            e.preventDefault();
+        };
+        window.addEventListener('contextmenu', preventContextMenu);
         loadOverlayConfig();
+
+        return () => {
+            window.removeEventListener('contextmenu', preventContextMenu);
+        };
     }, [loadOverlayConfig]);
 
     const hideOverlay = useCallback(() => {
@@ -205,7 +226,7 @@ export default function MediaOverlayPage() {
             if (!isHoveredRef.current) {
                 hideOverlay();
             }
-        }, 2500);
+        }, overlayTimeoutRef.current);
     }, [hideOverlay]);
 
     const showOverlay = useCallback(() => {
@@ -315,6 +336,7 @@ export default function MediaOverlayPage() {
                     const nextVol = pct / 100;
                     setVolume((prev) => (Math.abs(prev - nextVol) < 0.001 ? prev : nextVol));
                     setIsMuted((prev) => (prev === muted ? prev : muted));
+                    if (!overlayEnabledRef.current) return;
                     showOverlay();
                 }
             );
@@ -423,9 +445,13 @@ export default function MediaOverlayPage() {
         overlaySize === 's' ? 'h-1' : overlaySize === 'l' ? 'h-2' : overlaySize === 'xl' ? 'h-2.5' : 'h-1.5';
 
     return (
-        <main className="w-screen h-screen p-1 bg-transparent overflow-hidden select-none box-border">
+        <main
+            onContextMenu={(e) => e.preventDefault()}
+            className="w-screen h-screen p-1 bg-transparent overflow-hidden select-none box-border"
+        >
             <style>{`html, body { background: transparent !important; margin: 0; padding: 0; overflow: hidden; }`}</style>
             <div
+                onContextMenu={(e) => e.preventDefault()}
                 style={{
                     boxSizing: 'border-box',
                     backgroundColor: effectiveBg,

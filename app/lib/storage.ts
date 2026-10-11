@@ -104,6 +104,8 @@ export interface SymvoniaConfig {
     overlay_bg_color: OverlayBgColor;
     overlay_custom_bg_hex: string;
     overlay_size: OverlaySize;
+    overlay_timeout: number;
+    overlay_enabled: boolean;
 }
 
 const DEFAULT_CONFIG: SymvoniaConfig = {
@@ -180,6 +182,8 @@ const DEFAULT_CONFIG: SymvoniaConfig = {
     overlay_bg_color: 'default',
     overlay_custom_bg_hex: '#09090b',
     overlay_size: 'm',
+    overlay_timeout: 2500,
+    overlay_enabled: false,
 };
 
 // Global in-memory configuration cache

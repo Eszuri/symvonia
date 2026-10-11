@@ -43,6 +43,10 @@ interface HomeModalsProps {
     setOverlayCustomBgHex: (v: string) => void;
     overlaySize: OverlaySize;
     setOverlaySize: (v: OverlaySize) => void;
+    overlayTimeout: number;
+    setOverlayTimeout: (v: number) => void;
+    overlayEnabled: boolean;
+    setOverlayEnabled: (v: boolean) => void;
     onPreviewOverlay?: () => void;
     volume: number;
     defaultWallpaper: string | null;
@@ -128,6 +132,10 @@ export default function HomeModals({
     setOverlayCustomBgHex,
     overlaySize,
     setOverlaySize,
+    overlayTimeout,
+    setOverlayTimeout,
+    overlayEnabled,
+    setOverlayEnabled,
     onPreviewOverlay,
     volume,
     defaultWallpaper,
@@ -224,6 +232,10 @@ export default function HomeModals({
                 setOverlayCustomBgHex={setOverlayCustomBgHex}
                 overlaySize={overlaySize}
                 setOverlaySize={setOverlaySize}
+                overlayTimeout={overlayTimeout}
+                setOverlayTimeout={setOverlayTimeout}
+                overlayEnabled={overlayEnabled}
+                setOverlayEnabled={setOverlayEnabled}
                 onPreviewOverlay={onPreviewOverlay}
                 volume={volume}
                 defaultWallpaper={defaultWallpaper}

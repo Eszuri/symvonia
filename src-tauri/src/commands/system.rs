@@ -143,6 +143,10 @@ impl IAudioEndpointVolumeCallback_Impl for VolumeCallback_Impl {
 
             let handle = self.app_handle.clone();
             let _ = self.app_handle.run_on_main_thread(move || {
+                let config = crate::commands::config::load_config(&handle);
+                if !config.overlay_enabled {
+                    return;
+                }
                 if let Some(overlay) = handle.get_webview_window("media-overlay") {
                     let (x, y, w, h) = calculate_overlay_bounds(&handle);
                     if let Ok(hwnd) = overlay.hwnd() {
@@ -254,7 +258,10 @@ pub fn set_system_volume(app: AppHandle, value: u32) -> Result<(), String> {
             })?;
         }
 
-        let _ = show_media_overlay(app.clone());
+        let config = crate::commands::config::load_config(&app);
+        if config.overlay_enabled {
+            let _ = show_media_overlay(app.clone());
+        }
         let _ = app.emit("system-volume-changed", VolumeChangeEvent {
             volume: value.clamp(0, 100),
             muted: value == 0,
@@ -302,7 +309,10 @@ pub fn set_system_mute(app: AppHandle, mute: bool) -> Result<(), String> {
             })?;
         }
 
-        let _ = show_media_overlay(app.clone());
+        let config = crate::commands::config::load_config(&app);
+        if config.overlay_enabled {
+            let _ = show_media_overlay(app.clone());
+        }
         let _ = app.emit("system-volume-changed", VolumeChangeEvent {
             volume: current_vol,
             muted: mute,

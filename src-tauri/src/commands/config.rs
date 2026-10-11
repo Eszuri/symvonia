@@ -98,6 +98,14 @@ pub struct SymvoniaConfig {
     pub overlay_custom_bg_hex: String,
     #[serde(default = "default_overlay_size")]
     pub overlay_size: String,
+    #[serde(default = "default_overlay_timeout")]
+    pub overlay_timeout: u32,
+    #[serde(default = "default_overlay_enabled")]
+    pub overlay_enabled: bool,
+}
+
+fn default_overlay_enabled() -> bool {
+    false
 }
 
 fn default_overlay_position() -> String {
@@ -114,6 +122,10 @@ fn default_overlay_custom_bg_hex() -> String {
 
 fn default_overlay_size() -> String {
     "m".to_string()
+}
+
+fn default_overlay_timeout() -> u32 {
+    2500
 }
 
 impl Default for SymvoniaConfig {
@@ -206,6 +218,8 @@ impl Default for SymvoniaConfig {
             overlay_bg_color: "default".to_string(),
             overlay_custom_bg_hex: "#09090b".to_string(),
             overlay_size: "m".to_string(),
+            overlay_timeout: 2500,
+            overlay_enabled: false,
         }
     }
 }
@@ -340,6 +354,7 @@ impl SymvoniaConfig {
         if !matches!(self.overlay_size.as_str(), "s" | "m" | "l" | "xl") {
             self.overlay_size = "m".to_string();
         }
+        self.overlay_timeout = (self.overlay_timeout / 500).clamp(1, 60) * 500;
     }
 }
 

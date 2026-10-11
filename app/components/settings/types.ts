@@ -37,6 +37,10 @@ export interface SettingsModalProps {
     setOverlayCustomBgHex: (v: string) => void;
     overlaySize: OverlaySize;
     setOverlaySize: (v: OverlaySize) => void;
+    overlayTimeout: number;
+    setOverlayTimeout: (v: number) => void;
+    overlayEnabled: boolean;
+    setOverlayEnabled: (v: boolean) => void;
     onPreviewOverlay?: () => void;
     volume: number;
     defaultWallpaper: string | null;

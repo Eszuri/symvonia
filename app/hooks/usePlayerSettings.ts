@@ -83,6 +83,12 @@ export function usePlayerSettings() {
     const [overlaySize, setOverlaySizeStateInternal] = useState<OverlaySize>(
         init.overlay_size ?? 'm'
     );
+    const [overlayTimeout, setOverlayTimeoutStateInternal] = useState<number>(
+        init.overlay_timeout ?? 2500
+    );
+    const [overlayEnabled, setOverlayEnabledStateInternal] = useState<boolean>(
+        init.overlay_enabled ?? false
+    );
 
     const shortcutsRef = useRef<Record<ShortcutAction, string>>({
         ...DEFAULT_SHORTCUTS,
@@ -322,6 +328,8 @@ export function usePlayerSettings() {
             if (backendConfig.overlay_bg_color !== undefined) setOverlayBgColorStateInternal(backendConfig.overlay_bg_color);
             if (backendConfig.overlay_custom_bg_hex !== undefined) setOverlayCustomBgHexStateInternal(backendConfig.overlay_custom_bg_hex);
             if (backendConfig.overlay_size !== undefined) setOverlaySizeStateInternal(backendConfig.overlay_size);
+            if (backendConfig.overlay_timeout !== undefined) setOverlayTimeoutStateInternal(backendConfig.overlay_timeout);
+            if (backendConfig.overlay_enabled !== undefined) setOverlayEnabledStateInternal(backendConfig.overlay_enabled);
         }).catch(err => {
             console.error('[Symvonia Settings] Failed to load config from backend:', err);
         });
@@ -541,6 +549,18 @@ export function usePlayerSettings() {
         syncOverlayBounds();
     }, [syncOverlayBounds]);
 
+    const setOverlayTimeout = useCallback((timeout: number) => {
+        setOverlayTimeoutStateInternal(timeout);
+        setStoredValue('overlay_timeout', timeout);
+        syncOverlayBounds();
+    }, [syncOverlayBounds]);
+
+    const setOverlayEnabled = useCallback((enabled: boolean) => {
+        setOverlayEnabledStateInternal(enabled);
+        setStoredValue('overlay_enabled', enabled);
+        syncOverlayBounds();
+    }, [syncOverlayBounds]);
+
     const previewMediaOverlay = useCallback(async () => {
         try {
             const t = await getTauri();
@@ -638,6 +658,10 @@ export function usePlayerSettings() {
         setOverlayCustomBgHex,
         overlaySize,
         setOverlaySize,
+        overlayTimeout,
+        setOverlayTimeout,
+        overlayEnabled,
+        setOverlayEnabled,
         previewMediaOverlay,
     };
 }

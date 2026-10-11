@@ -606,6 +606,10 @@ function HomeContent() {
                 setOverlayCustomBgHex={settings.setOverlayCustomBgHex}
                 overlaySize={settings.overlaySize}
                 setOverlaySize={settings.setOverlaySize}
+                overlayTimeout={settings.overlayTimeout}
+                setOverlayTimeout={settings.setOverlayTimeout}
+                overlayEnabled={settings.overlayEnabled}
+                setOverlayEnabled={settings.setOverlayEnabled}
                 onPreviewOverlay={settings.previewMediaOverlay}
                 volume={player.activeVolume}
                 defaultWallpaper={settings.defaultWallpaper}
