@@ -5,6 +5,16 @@ import {type Lang} from '../../lib/translations';
 
 const changelogEn = [
     {
+        version: '1.0.7',
+        items: [
+            'Option to minimize to system tray so music keeps playing in the background.',
+            'Playback controls directly on the Windows taskbar preview.',
+            'Customizable media overlay position, size, and appearance.',
+            'Smoother folder navigation animations and loading skeletons.',
+            'Auto-skip ads in YouTube streaming webviews.',
+        ],
+    },
+    {
         version: '1.0.6',
         items: [
             'Direct3D 11 Wallpaper Engine: Hardware-accelerated desktop shader engine with visual effects and cover art transitions.',
@@ -200,6 +210,16 @@ const changelogEn = [
 ];
 
 const changelogId = [
+    {
+        version: '1.0.7',
+        items: [
+            'Opsi minimize ke system tray agar musik tetap berputar di background.',
+            'Kontrol pemutaran musik langsung dari preview taskbar Windows.',
+            'Kustomisasi posisi, ukuran, dan tampilan overlay media.',
+            'Animasi perpindahan folder dan loading skeleton lebih mulus.',
+            'Auto-skip iklan pada pemutar streaming YouTube.',
+        ],
+    },
     {
         version: '1.0.6',
         items: [

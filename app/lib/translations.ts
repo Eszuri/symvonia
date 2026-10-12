@@ -512,7 +512,7 @@ const en: Record<string, string> = {
     'style.sidebarWidth.resetBtn': 'Reset to Default',
 
     'about.title': 'Symvonia',
-    'about.version': 'Version 1.0.6',
+    'about.version': 'Version 1.0.7',
 
 
     'about.by': 'by',
@@ -1472,7 +1472,7 @@ const id: Record<string, string> = {
     'style.sidebarWidth.resetBtn': 'Reset ke default',
 
     'about.title': 'Symvonia',
-    'about.version': 'Versi 1.0.6',
+    'about.version': 'Versi 1.0.7',
 
 
     'about.by': 'oleh',
