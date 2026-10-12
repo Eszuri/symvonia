@@ -4,8 +4,11 @@ import { type ChangeEvent, useState } from "react";
 import type { FileEntry } from "../FolderExplorer";
 import type { SongMetadata } from "../PlayerPanel";
 import { t, type Lang } from "../../lib/translations";
+import SleepTimerMenu from '../SleepTimerMenu';
+import type {SleepTimerControls} from '../../hooks/useSleepTimer';
 
 interface SpotifyPlayerBarProps {
+    sleepTimer: SleepTimerControls;
     lang: Lang;
     selectedSong: FileEntry | null;
     metadata: SongMetadata | null;
@@ -43,6 +46,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function SpotifyPlayerBar({
+    sleepTimer,
     lang,
     selectedSong,
     metadata,
@@ -53,6 +57,7 @@ export default function SpotifyPlayerBar({
     shuffle,
     repeat,
     volume,
+    accentColor,
     showRightSidebar,
     setShowRightSidebar,
     togglePlayPause,
@@ -229,6 +234,7 @@ export default function SpotifyPlayerBar({
                             </span>
                         )}
                     </button>
+                    <SleepTimerMenu lang={lang} accentColor={accentColor} hasTrack={Boolean(selectedSong)} timer={sleepTimer} />
                 </div>
 
                 {/* Timeline Seekbar (Horizontal 3-part layout: Left Time + Bar + Right Time) */}

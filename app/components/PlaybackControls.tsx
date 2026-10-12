@@ -6,8 +6,12 @@ import {getAccent} from '../lib/colors';
 import {t, type Lang} from '../lib/translations';
 import {useHoverDescription} from '../hooks/useHoverDescription';
 import {ShuffleIcon, RepeatIcon, PrevIcon, NextIcon, PlayIcon, PauseIcon} from './icons';
+import SleepTimerMenu from './SleepTimerMenu';
+import type {SleepTimerControls} from '../hooks/useSleepTimer';
 
 interface PlaybackControlsProps {
+    sleepTimer: SleepTimerControls;
+    onSleepTimerOpenChange?: (open: boolean) => void;
     lang: Lang;
     selectedSong: FileEntry | null;
     isPlaying: boolean;
@@ -22,6 +26,8 @@ interface PlaybackControlsProps {
 }
 
 function PlaybackControls({
+    sleepTimer,
+    onSleepTimerOpenChange,
     lang,
     selectedSong,
     isPlaying,
@@ -68,7 +74,8 @@ function PlaybackControls({
     const repeatHover = useHoverDescription(hasSong ? t(lang, repeat === 'off' ? 'status.repeatAll' : repeat === 'all' ? 'status.repeatOne' : 'status.repeatOff') : null);
 
     return (
-        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+        <div className="flex w-full justify-center px-11 sm:px-12 md:px-13">
+            <div className="relative flex items-center gap-2 sm:gap-3 md:gap-4">
 
             {/* ── Shuffle ─────────────────────────────────────────── */}
             <button
@@ -139,6 +146,10 @@ function PlaybackControls({
                 )}
             </button>
 
+                <div className="absolute left-full ml-2 sm:ml-3 md:ml-4">
+                    <SleepTimerMenu lang={lang} accentColor={accentColor} hasTrack={hasSong} timer={sleepTimer} onOpenChange={onSleepTimerOpenChange} />
+                </div>
+            </div>
         </div>
     );
 }

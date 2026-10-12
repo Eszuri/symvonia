@@ -9,8 +9,10 @@ import SpotifyPlayerBar from "./SpotifyPlayerBar";
 import type { FileEntry } from "../FolderExplorer";
 import type { SongMetadata } from "../PlayerPanel";
 import type { Lang } from "../../lib/translations";
+import type {SleepTimerControls} from '../../hooks/useSleepTimer';
 
 interface SpotifyLayoutProps {
+    sleepTimer: SleepTimerControls;
     lang: Lang;
     musicFolder: string | null;
     displayPath: string;
@@ -46,6 +48,7 @@ interface SpotifyLayoutProps {
 }
 
 export default function SpotifyLayout({
+    sleepTimer,
     lang,
     musicFolder,
     displayPath,
@@ -129,6 +132,7 @@ export default function SpotifyLayout({
 
             {/* Bottom Container: Spotify Player Bar */}
             <SpotifyPlayerBar
+                sleepTimer={sleepTimer}
                 lang={lang}
                 selectedSong={selectedSong}
                 metadata={metadata}

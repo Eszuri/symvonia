@@ -14,6 +14,7 @@ import PlayerPanel, {SongMetadata} from "../PlayerPanel";
 import type {PlaybackRuntimeInfo} from '../../hooks/audio/playbackTypes';
 import SeekBar from "../SeekBar";
 import PlaybackControls from "../PlaybackControls";
+import type {SleepTimerControls} from '../../hooks/useSleepTimer';
 import VolumeControl from "../VolumeControl";
 import GainBoostControl from "../GainBoostControl";
 import MetadataPanel from "../MetadataPanel";
@@ -28,6 +29,7 @@ import {t, type Lang} from "../../lib/translations";
 import {contentMotion} from "../../lib/animations";
 
 interface HomePlayerAreaProps {
+    sleepTimer: SleepTimerControls;
     lang: Lang;
     layoutMode?: 'default' | 'spotify';
     musicFolder: string | null;
@@ -130,6 +132,7 @@ function appendDevTools(
 }
 
 function HomePlayerArea({
+    sleepTimer,
     lang,
     musicFolder,
     isCompact,
@@ -210,6 +213,7 @@ function HomePlayerArea({
     const [controlsVisible, setControlsVisible] = useState(true);
     const [hideDelayMs, setHideDelayMs] = useState(() => getStoredValue('autohide_delay_ms', 3000));
     const controlsHoverRef = useRef(false);
+    const sleepTimerOpenRef = useRef(false);
     const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const updateHideDelayMs = useCallback((val: number) => {
@@ -220,15 +224,21 @@ function HomePlayerArea({
     const triggerControlsVisibility = useCallback(() => {
         setControlsVisible(true);
         if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
 
-        if (hideDelayMs === 0) return; // 0 means Never hide
+        if (hideDelayMs === 0 || sleepTimerOpenRef.current) return;
 
         hideTimerRef.current = setTimeout(() => {
-            if (!controlsHoverRef.current && isFullScreenAlbum && selectedSong) {
+            if (!controlsHoverRef.current && !sleepTimerOpenRef.current && isFullScreenAlbum && selectedSong) {
                 setControlsVisible(false);
             }
         }, hideDelayMs);
     }, [isFullScreenAlbum, hideDelayMs, selectedSong]);
+
+    const handleSleepTimerOpenChange = useCallback((open: boolean) => {
+        sleepTimerOpenRef.current = open;
+        triggerControlsVisibility();
+    }, [triggerControlsVisibility]);
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
@@ -435,6 +445,7 @@ function HomePlayerArea({
     if (layoutMode === 'spotify') {
         return (
             <SpotifyLayout
+                sleepTimer={sleepTimer}
                 lang={lang}
                 musicFolder={musicFolder}
                 displayPath={displayPath}
@@ -631,6 +642,8 @@ function HomePlayerArea({
                                             </div>
                                             <div className="w-full flex justify-center mt-2">
                                                 <PlaybackControls
+                                                    sleepTimer={sleepTimer}
+                                                    onSleepTimerOpenChange={handleSleepTimerOpenChange}
                                                     lang={lang}
                                                     selectedSong={selectedSong}
                                                     isPlaying={selectedSong ? isPlaying : false}

@@ -518,6 +518,7 @@ function HomeContent() {
             />
 
             <HomePlayerArea
+                sleepTimer={player.sleepTimer}
                 lang={lang}
                 musicFolder={settings.musicFolder}
                 isCompact={isCompact}

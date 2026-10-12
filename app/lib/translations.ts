@@ -2,6 +2,18 @@ export type Lang = 'en' | 'id';
 
 
 const en: Record<string, string> = {
+    'sleepTimer.title': 'Sleep timer',
+    'sleepTimer.description': 'Pause music automatically when the timer ends.',
+    'sleepTimer.off': 'Off',
+    'sleepTimer.custom': 'Duration (minutes)',
+    'sleepTimer.preview': '{hours} h {minutes} min',
+    'sleepTimer.maximumExceeded': 'Exceeds the maximum of 1440 minutes (24 hours).',
+    'sleepTimer.start': 'Start',
+    'sleepTimer.afterTrack': 'After this track',
+    'sleepTimer.afterTrackDescription': 'Stop playback after the current track ends.',
+    'sleepTimer.trackBadge': 'Track end',
+    'sleepTimer.remaining': 'Remaining: {time}',
+    'sleepTimer.cancel': 'Cancel',
     'lang.en': 'English',
     'lang.id': 'Indonesia',
 
@@ -961,6 +973,18 @@ const en: Record<string, string> = {
 };
 
 const id: Record<string, string> = {
+    'sleepTimer.title': 'Sleep timer',
+    'sleepTimer.description': 'Jeda musik otomatis saat waktunya habis.',
+    'sleepTimer.off': 'Nonaktif',
+    'sleepTimer.custom': 'Durasi (menit)',
+    'sleepTimer.preview': '{hours} jam {minutes} menit',
+    'sleepTimer.maximumExceeded': 'Melebihi batas maksimal 1440 menit (24 jam).',
+    'sleepTimer.start': 'Mulai',
+    'sleepTimer.afterTrack': 'Setelah lagu selesai',
+    'sleepTimer.afterTrackDescription': 'Berhenti setelah lagu selesai.',
+    'sleepTimer.trackBadge': 'Akhir lagu',
+    'sleepTimer.remaining': 'Sisa: {time}',
+    'sleepTimer.cancel': 'Batalkan',
     'lang.en': 'English',
     'lang.id': 'Indonesia',
 
