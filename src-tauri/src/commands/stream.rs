@@ -158,6 +158,12 @@ pub async fn open_webview_stream(
         return Ok(());
     }
 
+    let stream_data_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("streaming-webview");
+
     let builder = WebviewWindowBuilder::new(
         &app,
         &label,
@@ -166,6 +172,7 @@ pub async fn open_webview_stream(
     .title(&title)
     .inner_size(1200.0, 800.0)
     .min_inner_size(800.0, 600.0)
+    .data_directory(stream_data_dir)
     .devtools(true)
     .initialization_script(YOUTUBE_ADBLOCK_SCRIPT);
 
