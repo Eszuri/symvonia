@@ -1,6 +1,6 @@
 'use client';
 
-import React, {memo, useEffect, useRef} from 'react';
+import {memo, useEffect, useRef} from 'react';
 import {AnimatePresence, motion} from 'framer-motion';
 import {getAccent} from '../lib/colors';
 import {t, type Lang} from '../lib/translations';

@@ -6,7 +6,7 @@ import {getAccent} from '../lib/colors';
 import {t, type Lang} from '../lib/translations';
 import {modalContentMotion, backdropMotion} from '../lib/animations';
 
-export interface ColumnDefinition {
+interface ColumnDefinition {
     key: string;
     labelKey: string;
     descKey: string;
@@ -14,7 +14,7 @@ export interface ColumnDefinition {
     defaultWidth: number;
 }
 
-export const ALL_TOOLBAR_COLUMNS: ColumnDefinition[] = [
+const ALL_TOOLBAR_COLUMNS: ColumnDefinition[] = [
     {key: 'name', labelKey: 'toolbarEdit.col.name', descKey: 'toolbarEdit.col.name.desc', required: true, defaultWidth: 180},
     {key: 'artist', labelKey: 'toolbarEdit.col.artist', descKey: 'toolbarEdit.col.artist.desc', defaultWidth: 112},
     {key: 'album', labelKey: 'toolbarEdit.col.album', descKey: 'toolbarEdit.col.album.desc', defaultWidth: 112},

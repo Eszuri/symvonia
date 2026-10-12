@@ -28,10 +28,7 @@ id3 = "1.1"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "webp"] }
 rayon = "1.10"
-symphonia = { version = "0.5", features = ["mp3", "flac", "pcm", "aac", "vorbis", "ogg", "wav", "aiff", "isomp4"] }
 cpal = "0.15"
-ringbuf = "0.3"
-crossbeam-channel = "0.5"
 ureq = { version = "2", features = ["tls"] }
 sha2 = "0.10"
 notify = "6.1"
