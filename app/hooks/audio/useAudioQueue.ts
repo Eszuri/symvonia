@@ -270,7 +270,7 @@ export function useAudioQueue({
         };
     }, [listFiles, loadFiles, musicFolder, isMountedRef, onSongSelectedMissing]);
 
-    // Load files when path changes
+    // Load once when the path, sorting, or format filter changes.
     useEffect(() => {
         const timer = window.setTimeout(() => {
             if (currentPath) {
@@ -279,14 +279,6 @@ export function useAudioQueue({
                 setFiles([]);
                 setFilesLoadedOnce(true);
             }
-        }, 0);
-        return () => window.clearTimeout(timer);
-    }, [currentPath, loadFiles]);
-
-    // Load files when sorting or formats change
-    useEffect(() => {
-        const timer = window.setTimeout(() => {
-            if (currentPath) void loadFiles(currentPath);
         }, 0);
         return () => window.clearTimeout(timer);
     }, [currentPath, folderSort, fileSort, sortDir, nameSource, formats, loadFiles]);

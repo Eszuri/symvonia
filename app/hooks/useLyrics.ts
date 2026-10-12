@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getTauri, isBrowserTauri } from '../lib/homeState';
 
 interface LyricLine {
@@ -29,7 +29,7 @@ export interface LyricsState {
     isFetchingOnline: boolean;
     activeIndex: number;
     importLyricsFile: (fileContent: string, fileName: string) => void;
-    fetchOnlineLyrics: (title?: string, artist?: string, album?: string, duration?: number) => Promise<boolean>;
+    fetchOnlineLyrics: (title?: string, artist?: string, album?: string, duration?: number) => Promise<boolean | null>;
     searchOnlineLyrics: (query: string) => Promise<OnlineLyricItem[]>;
     applyLyrics: (content: string, sourceName?: string) => void;
     saveAsLrcFile: () => Promise<boolean>;
@@ -101,13 +101,15 @@ export function useLyrics(
     const [source, setSource] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(Boolean(songPath && isBrowserTauri()));
     const [isFetchingOnline, setIsFetchingOnline] = useState<boolean>(false);
+    const onlineRequestRef = useRef(0);
 
     // Function to manually trigger online search for lyrics
     const fetchOnlineLyrics = useCallback(
-        async (title?: string, artist?: string, album?: string, dur?: number): Promise<boolean> => {
+        async (title?: string, artist?: string, album?: string, dur?: number): Promise<boolean | null> => {
             const queryTitle = title || songTitle;
             if (!queryTitle || !isBrowserTauri()) return false;
 
+            const request = ++onlineRequestRef.current;
             setIsFetchingOnline(true);
             try {
                 const mod = await getTauri();
@@ -118,6 +120,7 @@ export function useLyrics(
                     duration: dur || duration || null,
                 });
 
+                if (request !== onlineRequestRef.current) return null;
                 if (res && res.raw_text) {
                     setRawText(res.raw_text);
                     setSource('lrclib');
@@ -126,8 +129,9 @@ export function useLyrics(
             } catch (err) {
                 console.warn('Failed to fetch online lyrics:', err);
             } finally {
-                setIsFetchingOnline(false);
+                if (request === onlineRequestRef.current) setIsFetchingOnline(false);
             }
+            if (request !== onlineRequestRef.current) return null;
             return false;
         },
         [songTitle, artistName, albumName, duration]
@@ -138,10 +142,14 @@ export function useLyrics(
         const frame = requestAnimationFrame(() => {
             setRawText(null);
             setSource(null);
+            setIsFetchingOnline(false);
             setLoading(Boolean(songPath && isBrowserTauri()));
         });
         if (!songPath) {
-            return () => cancelAnimationFrame(frame);
+            return () => {
+                cancelAnimationFrame(frame);
+                onlineRequestRef.current += 1;
+            };
         }
 
         let isMounted = true;
@@ -171,6 +179,8 @@ export function useLyrics(
         }
 
         return () => {
+            cancelAnimationFrame(frame);
+            onlineRequestRef.current += 1;
             isMounted = false;
         };
     }, [songPath]);

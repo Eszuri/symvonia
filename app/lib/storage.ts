@@ -285,11 +285,12 @@ export function setStoredValue<K extends keyof SymvoniaConfig>(
         }
     };
 
+    if (saveTimers[key]) {
+        clearTimeout(saveTimers[key]);
+        delete saveTimers[key];
+    }
     const debounceMs = options?.debounceMs ?? 0;
     if (debounceMs > 0) {
-        if (saveTimers[key as string]) {
-            clearTimeout(saveTimers[key as string]);
-        }
         saveTimers[key as string] = setTimeout(() => {
             performSave();
             delete saveTimers[key as string];

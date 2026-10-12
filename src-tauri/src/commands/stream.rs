@@ -78,11 +78,26 @@ const YOUTUBE_ADBLOCK_SCRIPT: &str = r#"
         (document.head || document.documentElement).appendChild(style);
     }
 
+    let adPlaybackState = null;
+
+    function restoreAdPlaybackState() {
+        if (!adPlaybackState) return;
+        adPlaybackState.video.muted = adPlaybackState.muted;
+        adPlaybackState.video.playbackRate = adPlaybackState.playbackRate;
+        adPlaybackState = null;
+    }
+
     function autoSkipAds() {
         injectAdblockStyle();
         const video = document.querySelector('video');
         const adShowing = document.querySelector('.ad-showing, .ad-interrupting');
+        if (adPlaybackState && (!adShowing || adPlaybackState.video !== video)) {
+            restoreAdPlaybackState();
+        }
         if (video && adShowing) {
+            if (!adPlaybackState) {
+                adPlaybackState = {video, muted: video.muted, playbackRate: video.playbackRate};
+            }
             video.muted = true;
             video.playbackRate = 16.0;
             if (isFinite(video.duration) && video.duration > 0) {
@@ -116,6 +131,7 @@ const YOUTUBE_ADBLOCK_SCRIPT: &str = r#"
 
     injectAdblockStyle();
     setInterval(autoSkipAds, 250);
+    window.addEventListener('pagehide', restoreAdPlaybackState);
     document.addEventListener('DOMContentLoaded', injectAdblockStyle);
 })();
 "#;

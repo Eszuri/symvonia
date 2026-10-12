@@ -141,15 +141,20 @@ export function useAppUpdater(options: UseAppUpdaterOptions) {
                 });
                 const total = autoUpdateTotalRef.current;
                 if (total > 0) setAutoUpdateProgress(total);
-                setAutoUpdateDownloading(false);
                 await update.install();
+            } else {
+                setAutoUpdateInfo(update ? {version: update.version, update} : null);
+                setAutoUpdateProgress(0);
+                setAutoUpdateTotal(0);
+                autoUpdateTotalRef.current = 0;
             }
         } catch (e) {
             const msg = String(e);
             addLog('error', t(lang, 'log.autoUpdateFailed', {msg: msg.slice(0, 80)}));
-            setAutoUpdateDownloading(false);
             setAutoUpdateInfo(null);
-            }
+        } finally {
+            setAutoUpdateDownloading(false);
+        }
     }, [autoUpdateInfo, addLog, lang]);
 
     return {

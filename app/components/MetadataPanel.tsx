@@ -215,7 +215,7 @@ function LyricsSection({
         }
 
         const found = await fetchOnlineLyrics(songTitle, artistName, albumName, duration);
-        if (!found) {
+        if (found === false) {
             // Tampilkan modal pencarian manual jika tidak ditemukan otomatis
             onOpenLyricsSearch?.();
         }
