@@ -31,5 +31,8 @@
         "eslint-config-next": "16.2.6",
         "tailwindcss": "^4",
         "typescript": "^5"
+    },
+    "optionalDependencies": {
+        "@next/swc-win32-x64-msvc": "^16.2.6"
     }
 }
