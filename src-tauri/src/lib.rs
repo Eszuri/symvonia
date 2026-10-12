@@ -310,6 +310,8 @@ pub fn run() {
             set_app_config_key,
             save_config_value,
             reset_app_config,
+            export_config_backup,
+            import_config_backup,
             open_config_folder,
             get_storage_usage,
             clean_library_cache,

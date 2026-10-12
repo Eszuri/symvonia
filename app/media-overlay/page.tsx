@@ -159,7 +159,7 @@ export default function MediaOverlayPage() {
     const [isAnimatingOut, setIsAnimatingOut] = useState<boolean>(false);
     const [overlaySize, setOverlaySize] = useState<'s' | 'm' | 'l' | 'xl'>('m');
     const [overlayBgColor, setOverlayBgColor] = useState<string>('default');
-    const [overlayCustomBgHex, setOverlayCustomBgHex] = useState<string>('#09090b');
+    const [overlayCustomBgHex, setOverlayCustomBgHex] = useState<string>('#18181b');
 
     const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
     const animTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -395,12 +395,15 @@ export default function MediaOverlayPage() {
     const effectiveVol = isMuted ? 0 : volume;
     const volPct = Math.max(0, Math.min(100, Math.round(effectiveVol * 100)));
 
-    let effectiveBg = '#09090b';
-    if (overlayBgColor === 'black') effectiveBg = '#000000';
-    else if (overlayBgColor === 'charcoal') effectiveBg = '#18181b';
-    else if (overlayBgColor === 'slate') effectiveBg = '#0f172a';
+    let effectiveBg = '#18181b';
+    if (overlayBgColor === 'black') effectiveBg = '#101012';
+    else if (overlayBgColor === 'charcoal') effectiveBg = '#1c1c1f';
+    else if (overlayBgColor === 'slate') effectiveBg = '#141c2e';
     else if (overlayBgColor === 'accent') effectiveBg = accent.hex500 || '#0284c7';
-    else if (overlayBgColor === 'custom') effectiveBg = overlayCustomBgHex || '#09090b';
+    else if (overlayBgColor === 'custom') {
+        const hex = (overlayCustomBgHex || '').trim().toLowerCase();
+        effectiveBg = hex === '#000000' || hex === '#000' ? '#101012' : (overlayCustomBgHex || '#18181b');
+    }
 
     const isAccentBg = overlayBgColor === 'accent';
 
@@ -448,18 +451,32 @@ export default function MediaOverlayPage() {
             onContextMenu={(e) => e.preventDefault()}
             className="w-screen h-screen p-1 bg-transparent overflow-hidden select-none box-border"
         >
-            <style>{`html, body { background: transparent !important; margin: 0; padding: 0; overflow: hidden; }`}</style>
+            <style>{`
+                html, body {
+                    background: transparent !important;
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                }
+                .media-overlay-card {
+                    background-color: ${effectiveBg} !important;
+                    -webkit-backface-visibility: hidden;
+                    backface-visibility: hidden;
+                }
+            `}</style>
             <div
                 onContextMenu={(e) => e.preventDefault()}
                 style={{
                     boxSizing: 'border-box',
                     backgroundColor: effectiveBg,
                     borderColor: isAccentBg ? 'rgba(255, 255, 255, 0.2)' : 'rgba(39, 39, 42, 0.9)',
+                    WebkitBackfaceVisibility: 'hidden',
+                    backfaceVisibility: 'hidden',
                 }}
-                className={`w-full h-full border rounded-xl ${cardPadding} flex flex-col justify-between shadow-[0_12px_36px_rgba(0,0,0,0.85)] text-zinc-100 transition-[opacity,transform] duration-150 ease-out overflow-hidden ${
+                className={`media-overlay-card w-full h-full border rounded-xl ${cardPadding} flex flex-col justify-between shadow-[0_12px_36px_rgba(0,0,0,0.85)] text-zinc-100 transition-[opacity,transform] duration-150 ease-out overflow-hidden bg-zinc-900 ${
                     isAnimatingOut
-                        ? 'opacity-0 scale-95 -translate-y-2'
-                        : 'opacity-100 scale-100 translate-y-0'
+                        ? 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                        : 'opacity-100'
                 }`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}

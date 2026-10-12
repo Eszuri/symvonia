@@ -567,6 +567,86 @@ pub fn reset_app_config(app: AppHandle) -> Result<SymvoniaConfig, String> {
     Ok(default_config)
 }
 
+pub fn export_config_to_path(config: &SymvoniaConfig, path: &Path) -> Result<(), String> {
+    let mut sanitized = config.clone();
+    sanitized.sanitize();
+    let json_bytes = serde_json::to_vec_pretty(&sanitized)
+        .map_err(|e| format!("Failed to serialize configuration: {}", e))?;
+    fs::write(path, json_bytes)
+        .map_err(|e| format!("Failed to write configuration file: {}", e))?;
+    Ok(())
+}
+
+pub fn import_config_from_content(content: &str) -> Result<SymvoniaConfig, String> {
+    let mut config: SymvoniaConfig = serde_json::from_str(content)
+        .map_err(|e| format!("Invalid configuration format: {}", e))?;
+    config.sanitize();
+    Ok(config)
+}
+
+#[tauri::command]
+pub async fn export_config_backup(app: AppHandle) -> Result<Option<String>, String> {
+    let config = load_config(&app);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let default_name = format!("symvonia-config-backup-{}.json", timestamp);
+
+    let file = rfd::AsyncFileDialog::new()
+        .set_title("Export Configuration Backup")
+        .set_file_name(&default_name)
+        .add_filter("JSON Configuration", &["json"])
+        .save_file()
+        .await;
+
+    if let Some(file_handle) = file {
+        let path = file_handle.path().to_path_buf();
+        export_config_to_path(&config, &path)?;
+        Ok(Some(path.to_string_lossy().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+pub async fn import_config_backup(app: AppHandle) -> Result<Option<SymvoniaConfig>, String> {
+    let file = rfd::AsyncFileDialog::new()
+        .set_title("Import Configuration Backup")
+        .add_filter("JSON Configuration", &["json"])
+        .pick_file()
+        .await;
+
+    if let Some(file_handle) = file {
+        let path = file_handle.path();
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read backup file: {}", e))?;
+
+        let config = import_config_from_content(&content)?;
+        save_config(&app, &config)?;
+
+        // Synchronize global wallpaper states
+        if let Ok(mut guard) = crate::commands::wallpaper::WALLPAPER_FIT_MODE.lock() {
+            *guard = config.wallpaper_fit_mode.clone();
+        }
+        if let Ok(mut guard) = crate::commands::wallpaper::WALLPAPER_EFFECT.lock() {
+            *guard = config.wallpaper_effect.clone();
+        }
+        if let Ok(mut guard) = crate::commands::wallpaper::WALLPAPER_TRANSITION.lock() {
+            *guard = config.wallpaper_transition.clone();
+        }
+        if let Ok(mut guard) = crate::commands::wallpaper::DEFAULT_WALLPAPER_PATH.lock() {
+            *guard = config.default_wallpaper.clone();
+        }
+        crate::commands::wallpaper::RESET_ON_CLOSE
+            .store(config.reset_on_close, std::sync::atomic::Ordering::SeqCst);
+
+        Ok(Some(config))
+    } else {
+        Ok(None)
+    }
+}
+
 #[tauri::command]
 pub fn open_config_folder(app: AppHandle) -> Result<(), String> {
     let dir = app
@@ -707,5 +787,37 @@ mod tests {
         };
         high_config.sanitize();
         assert_eq!(high_config.gain_boost, 3.0);
+    }
+
+    #[test]
+    fn import_config_from_content_parses_and_sanitizes() {
+        let raw = r#"{
+            "language": "id",
+            "app_volume": 2.5,
+            "volume_step": 20,
+            "accent_color": "emerald"
+        }"#;
+        let config = import_config_from_content(raw).expect("Valid json config");
+        assert_eq!(config.language, "id");
+        assert_eq!(config.accent_color, "emerald");
+        assert_eq!(config.app_volume, 1.0);
+        assert_eq!(config.volume_step, 10);
+    }
+
+    #[test]
+    fn export_config_to_path_round_trips_valid_json() {
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join(format!("symvonia_test_backup_{}.json", std::process::id()));
+        let config = SymvoniaConfig {
+            language: "id".to_string(),
+            accent_color: "zinc".to_string(),
+            ..Default::default()
+        };
+        export_config_to_path(&config, &temp_file).expect("Write to temp file");
+        let content = fs::read_to_string(&temp_file).expect("Read from temp file");
+        let _ = fs::remove_file(&temp_file);
+        let imported = import_config_from_content(&content).expect("Parse exported content");
+        assert_eq!(imported.language, "id");
+        assert_eq!(imported.accent_color, "zinc");
     }
 }

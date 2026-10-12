@@ -395,3 +395,56 @@ export async function cleanAllAppData(): Promise<boolean> {
         return false;
     }
 }
+
+export interface BackupResult {
+    success: boolean;
+    path?: string;
+    cancelled?: boolean;
+    error?: string;
+}
+
+export interface RestoreResult {
+    success: boolean;
+    config?: SymvoniaConfig;
+    cancelled?: boolean;
+    error?: string;
+}
+
+/**
+ * Export a full JSON configuration backup file
+ */
+export async function exportConfigBackup(): Promise<BackupResult> {
+    if (typeof window === 'undefined') return { success: false, error: 'Window not available' };
+    try {
+        const tauri = await getTauri();
+        const savedPath = await tauri.invoke<string | null>('export_config_backup');
+        if (!savedPath) {
+            return { success: false, cancelled: true };
+        }
+        return { success: true, path: savedPath };
+    } catch (err) {
+        console.error('[Symvonia Storage] Failed to export config backup:', err);
+        return { success: false, error: String(err) };
+    }
+}
+
+/**
+ * Import a full JSON configuration backup file
+ */
+export async function importConfigBackup(): Promise<RestoreResult> {
+    if (typeof window === 'undefined') return { success: false, error: 'Window not available' };
+    try {
+        const tauri = await getTauri();
+        const importedConfig = await tauri.invoke<SymvoniaConfig | null>('import_config_backup');
+        if (!importedConfig) {
+            return { success: false, cancelled: true };
+        }
+        inMemoryConfig = importedConfig;
+        const win = window as unknown as { __SYMVONIA_INITIAL_CONFIG__?: SymvoniaConfig };
+        win.__SYMVONIA_INITIAL_CONFIG__ = importedConfig;
+        return { success: true, config: importedConfig };
+    } catch (err) {
+        console.error('[Symvonia Storage] Failed to import config backup:', err);
+        return { success: false, error: String(err) };
+    }
+}

@@ -11,6 +11,8 @@ import {
     cleanLibraryCache,
     cleanAiModelsData,
     cleanAllAppData,
+    exportConfigBackup,
+    importConfigBackup,
     type StorageUsage,
 } from '../../lib/storage';
 
@@ -35,10 +37,19 @@ export default function StorageSection({
     const [storageCleaning, setStorageCleaning] = useState(false);
     const [storageInfo, setStorageInfo] = useState<StorageUsage | null>(null);
 
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [backupBusy, setBackupBusy] = useState(false);
+
     const [showCleanCacheConfirm, setShowCleanCacheConfirm] = useState(false);
     const [showCleanModelsConfirm, setShowCleanModelsConfirm] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [showFullWipeConfirm, setShowFullWipeConfirm] = useState(false);
+
+    useEffect(() => {
+        if (!statusMessage) return;
+        const timer = window.setTimeout(() => setStatusMessage(null), 4500);
+        return () => window.clearTimeout(timer);
+    }, [statusMessage]);
 
     const refreshStorage = useCallback(async () => {
         const usage = await getStorageUsage();
@@ -56,6 +67,27 @@ export default function StorageSection({
 
     return (
         <div className="space-y-6">
+            {statusMessage && (
+                <div
+                    className={`p-3.5 rounded-xl text-xs flex items-center justify-between border shadow-sm transition-all ${
+                        statusMessage.type === 'success'
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                            : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                    }`}
+                >
+                    <div className="flex items-center gap-2.5">
+                        <span className="text-sm">{statusMessage.type === 'success' ? '✓' : '⚠️'}</span>
+                        <span className="leading-relaxed">{statusMessage.text}</span>
+                    </div>
+                    <button
+                        onClick={() => setStatusMessage(null)}
+                        className="text-zinc-400 hover:text-zinc-200 cursor-pointer ml-3 text-xs"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             <SettingGroup title={t(lang, 'general.group.storage')}>
                 <div className="p-4 border-b border-zinc-800/40 flex flex-col gap-3">
                     <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
@@ -122,6 +154,69 @@ export default function StorageSection({
                         </button>
                     </SettingRow>
                 )}
+            </SettingGroup>
+
+            <SettingGroup title={t(lang, 'general.group.backup')}>
+                <SettingRow
+                    title={t(lang, 'general.backup.exportTitle')}
+                    description={t(lang, 'general.backup.exportDesc')}
+                >
+                    <button
+                        onClick={async () => {
+                            setBackupBusy(true);
+                            const res = await exportConfigBackup();
+                            setBackupBusy(false);
+                            if (res.success && res.path) {
+                                setStatusMessage({
+                                    type: 'success',
+                                    text: t(lang, 'general.backup.exportSuccess', { path: res.path }),
+                                });
+                            } else if (!res.cancelled && res.error) {
+                                setStatusMessage({
+                                    type: 'error',
+                                    text: res.error,
+                                });
+                            }
+                        }}
+                        disabled={backupBusy}
+                        {...settingItemHover}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 hover:text-white border border-zinc-700/60 shadow-xs transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
+                    >
+                        {t(lang, 'general.backup.exportButton')}
+                    </button>
+                </SettingRow>
+
+                <SettingRow
+                    title={t(lang, 'general.backup.importTitle')}
+                    description={t(lang, 'general.backup.importDesc')}
+                >
+                    <button
+                        onClick={async () => {
+                            setBackupBusy(true);
+                            const res = await importConfigBackup();
+                            setBackupBusy(false);
+                            if (res.success && res.config) {
+                                setStatusMessage({
+                                    type: 'success',
+                                    text: t(lang, 'general.backup.importSuccess'),
+                                });
+                                window.setTimeout(() => {
+                                    window.location.reload();
+                                }, 1200);
+                            } else if (!res.cancelled && res.error) {
+                                setStatusMessage({
+                                    type: 'error',
+                                    text: t(lang, 'general.backup.importError', { msg: res.error }),
+                                });
+                            }
+                        }}
+                        disabled={backupBusy}
+                        {...settingItemHover}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white ${accent.bg500} hover:brightness-110 shadow-xs transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap`}
+                    >
+                        {t(lang, 'general.backup.importButton')}
+                    </button>
+                </SettingRow>
             </SettingGroup>
 
             <SettingGroup title={t(lang, 'general.group.reset')}>
