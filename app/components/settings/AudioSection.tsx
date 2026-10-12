@@ -260,7 +260,7 @@ export default function AudioSection({
                                 setTestResult(null);
                                 setTestError(null);
                             }}
-                            disabled={!installed}
+                            disabled={!installed || !nativeMode}
                             accent={accent}
                             accentColor={accentColor}
                             fullWidth

@@ -59,6 +59,12 @@ export default function SleepTimerMenu({lang, accentColor, hasTrack, timer, onOp
         };
     }, [open]);
 
+    useEffect(() => {
+        if (!hasTrack && !active && open) {
+            setOpen(false);
+        }
+    }, [hasTrack, active, open]);
+
     return (
         <div ref={containerRef} className="relative shrink-0" onKeyDown={event => {
             // Keep playback shortcuts from intercepting keyboard use of this control.
@@ -69,13 +75,15 @@ export default function SleepTimerMenu({lang, accentColor, hasTrack, timer, onOp
             }
         }}>
             <button ref={triggerRef} type="button" onClick={() => {
+                if (!hasTrack && !active) return;
                 if (!open) setAfterTrack(timer.mode === 'track');
                 setOpen(!open);
             }}
+                disabled={!hasTrack && !active}
                 aria-expanded={open} aria-controls={id}
                 aria-label={`${t(lang, 'sleepTimer.title')}: ${active ? label : t(lang, 'sleepTimer.off')}`}
                 title={t(lang, 'sleepTimer.title')}
-                className={`flex w-max items-center justify-center gap-1.5 h-9 min-w-9 whitespace-nowrap rounded-lg text-xs font-medium cursor-pointer transition-colors ${active ? `px-3 ${accent.bg15} ${accent.text400}` : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
+                className={`flex w-max items-center justify-center gap-1.5 h-9 min-w-9 whitespace-nowrap rounded-lg text-xs font-medium cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-default ${active ? `px-3 ${accent.bg15} ${accent.text400}` : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M10 2h4M12 14l3-3M18 6l1.5-1.5" />
                     <circle cx="12" cy="14" r="8" />

@@ -11,19 +11,27 @@ interface AutoHideTimerMenuProps {
     hideDelayMs: number;
     setHideDelayMs: (val: number) => void;
     accentColor: string;
+    disabled?: boolean;
 }
 
 export default function AutoHideTimerMenu({
     lang,
     hideDelayMs,
     setHideDelayMs,
-    accentColor
+    accentColor,
+    disabled = false,
 }: AutoHideTimerMenuProps) {
     const accent = getAccent(accentColor);
     const {setHoverInfo} = useHoverInfo();
     const [open, setOpen] = useState(false);
     const [customValue, setCustomValue] = useState(hideDelayMs.toString());
     const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (disabled && open) {
+            setOpen(false);
+        }
+    }, [disabled, open]);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -53,14 +61,18 @@ export default function AutoHideTimerMenu({
         }
     };
 
-    const timerHover = useHoverDescription(t(lang, 'status.timer'));
+    const timerHover = useHoverDescription(disabled ? null : t(lang, 'status.timer'));
 
     return (
         <div className="absolute top-12 right-9 max-lg:top-4 max-lg:right-0 z-50 flex flex-col items-end gap-1.5" ref={menuRef}>
             <button
                 {...timerHover}
-                onClick={() => setOpen(!open)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/10 flex items-center gap-1.5 backdrop-blur-xl shadow-lg"
+                disabled={disabled}
+                onClick={() => {
+                    if (disabled) return;
+                    setOpen(!open);
+                }}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/10 flex items-center gap-1.5 backdrop-blur-xl shadow-lg disabled:opacity-30 disabled:cursor-default ${disabled ? 'pointer-events-none' : ''}`}
                 title={t(lang, 'contextMenu.fullScreenAlbum')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

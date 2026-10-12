@@ -610,6 +610,7 @@ function HomePlayerArea({
                                                     hideDelayMs={hideDelayMs}
                                                     setHideDelayMs={updateHideDelayMs}
                                                     accentColor={accentColor}
+                                                    disabled={!selectedSong}
                                                 />
                                             </motion.div>
                                         )}
