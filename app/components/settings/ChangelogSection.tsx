@@ -5,6 +5,14 @@ import {type Lang} from '../../lib/translations';
 
 const changelogEn = [
     {
+        version: '1.0.8',
+        items: [
+            'Sleep timer to stop playback automatically.',
+            'Backup and restore settings configuration.',
+            'Playback and streaming controls in media overlay.',
+        ],
+    },
+    {
         version: '1.0.7',
         items: [
             'Option to minimize to system tray so music keeps playing in the background.',
@@ -210,6 +218,14 @@ const changelogEn = [
 ];
 
 const changelogId = [
+    {
+        version: '1.0.8',
+        items: [
+            'Fitur Sleep Timer untuk mematikan musik otomatis.',
+            'Backup dan restore pengaturan aplikasi.',
+            'Kontrol pemutaran dan streaming di overlay media.',
+        ],
+    },
     {
         version: '1.0.7',
         items: [
