@@ -472,7 +472,7 @@ const en: Record<string, string> = {
     'sort.name.titleLabel': 'Title (Metadata)',
 
     'sort.nameSource.filenameInfo': 'If you want to display the title from metadata (not the filename), loading may take a bit longer.',
-    'sort.nameSource.titleWarning': 'Using Title (Metadata) will read tags from every audio file, so loading may take longer especially if the folder has many files. It may even cause the app to crash.',
+    'sort.nameSource.titleWarning': 'Reading metadata may slow down loading if the folder contains many audio files.',
 
     'sort.format.add': 'Add',
     'sort.format.placeholder': '.aac',
@@ -1458,7 +1458,7 @@ const id: Record<string, string> = {
     'sort.name.titleLabel': 'Title (Metadata)',
 
     'sort.nameSource.filenameInfo': 'Jika ingin menampilkan judul dari metadata (bukan nama file), waktu memuat daftar lagu akan sedikit lebih lama.',
-    'sort.nameSource.titleWarning': 'Menggunakan Title (Metadata) akan membaca tag dari setiap file audio, sehingga waktu memuat daftar lagu bisa lebih lama terutama jika folder berisi banyak file. Bahkan bisa menyebabkan aplikasi menjadi crash.',
+    'sort.nameSource.titleWarning': 'Membaca metadata dapat memperlambat pemuatan jika folder berisi banyak lagu.',
 
     'sort.format.add': 'Tambah',
     'sort.format.placeholder': '.aac',
