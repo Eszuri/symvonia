@@ -726,6 +726,7 @@ pub fn clean_all_app_data(
     cache: tauri::State<'_, crate::library_cache::LibraryCacheState>,
 ) -> Result<(), String> {
     cache.clear(&app)?;
+    cache.detach()?;
     let base_dir = app
         .path()
         .app_data_dir()

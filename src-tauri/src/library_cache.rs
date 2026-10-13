@@ -105,13 +105,44 @@ impl LibraryCacheState {
         Ok(())
     }
 
-    pub fn clear(&self, app: &AppHandle) -> Result<(), String> {
-        self.stop_watcher();
+    pub fn clear_snapshots(&self, app: &AppHandle) -> Result<(), String> {
         let cache_dir = cache_base_dir(app)?;
         if cache_dir.exists() {
             fs::remove_dir_all(&cache_dir)
                 .map_err(|e| format!("Failed to clear library cache: {}", e))?;
         }
+        let current_root = {
+            let mut inner = self
+                .inner
+                .lock()
+                .map_err(|_| "Cache lock poisoned".to_string())?;
+            inner.memory.clear();
+            inner.dirty.clear();
+            inner.root_path.clone()
+        };
+
+        if let Some(root_path) = current_root {
+            let has_watcher = self
+                .inner
+                .lock()
+                .map(|inner| inner.watcher.is_some())
+                .unwrap_or(false);
+            if !has_watcher {
+                let _ = self.start_watcher(app.clone(), root_path.clone());
+            }
+
+            let payload = LibraryCacheInvalidatedPayload {
+                root_path: root_path.clone(),
+                affected_paths: vec![root_path, "*".to_string()],
+            };
+            let _ = app.emit(INVALIDATION_EVENT, payload);
+        }
+        Ok(())
+    }
+
+    /// Detaches the library: stops the filesystem watcher and resets active root, memory, and dirty state.
+    pub fn detach(&self) -> Result<(), String> {
+        self.stop_watcher();
         let mut inner = self
             .inner
             .lock()
@@ -120,6 +151,11 @@ impl LibraryCacheState {
         inner.memory.clear();
         inner.dirty.clear();
         Ok(())
+    }
+
+    /// Clears directory snapshots while retaining root and watcher.
+    pub fn clear(&self, app: &AppHandle) -> Result<(), String> {
+        self.clear_snapshots(app)
     }
 
     pub fn active_root(&self) -> Option<String> {
@@ -547,5 +583,21 @@ mod tests {
         };
         let affected = affected_directories(&event, "C:/Music");
         assert!(affected.iter().any(|path| path == "C:/Music/Album"));
+    }
+
+    #[test]
+    fn detach_resets_root_and_state() {
+        let state = LibraryCacheState::default();
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.root_path = Some("C:/Music".to_string());
+            inner.dirty.insert("c:/music".to_string());
+        }
+        assert_eq!(state.active_root(), Some("C:/Music".to_string()));
+        state.detach().unwrap();
+        assert_eq!(state.active_root(), None);
+        let inner = state.inner.lock().unwrap();
+        assert!(inner.dirty.is_empty());
+        assert!(inner.memory.is_empty());
     }
 }

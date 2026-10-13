@@ -248,7 +248,10 @@ export function useAudioQueue({
             const affected = event.affected_paths.map(normalizePath);
             const current = currentPathRef.current ? normalizePath(currentPathRef.current) : "";
             const playlistFolder = playlistFolderRef.current ? normalizePath(playlistFolderRef.current) : "";
-            const isAffected = (path: string) => affected.includes(path);
+            const isAffected = (path: string) =>
+                affected.includes("*") ||
+                affected.includes(path) ||
+                affected.some((a) => a === "*" || path === a || path.startsWith(`${a}/`));
             const currentAffected = Boolean(current) && isAffected(current);
             const playlistAffected = Boolean(playlistFolder) && isAffected(playlistFolder);
             if (currentAffected && currentPathRef.current) {
