@@ -170,6 +170,14 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         loadMetadata,
     } = wallpaperHook;
 
+    const handleSongSelectedSync = useCallback((filePath: string) => {
+        loadMetadata(filePath, true);
+    }, [loadMetadata]);
+
+    const handleSongSelectedMissing = useCallback(() => {
+        setMetadata(null);
+    }, [setMetadata]);
+
     // Sub-hook: Audio Queue & Playlist
     const queue = useAudioQueue({
         musicFolder,
@@ -180,8 +188,8 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         formats,
         showError,
         isMountedRef,
-        onSongSelectedSync: (filePath) => loadMetadata(filePath, true),
-        onSongSelectedMissing: () => setMetadata(null),
+        onSongSelectedSync: handleSongSelectedSync,
+        onSongSelectedMissing: handleSongSelectedMissing,
     });
     const {
         files,

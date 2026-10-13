@@ -27,11 +27,7 @@ export default function AutoHideTimerMenu({
     const [customValue, setCustomValue] = useState(hideDelayMs.toString());
     const menuRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (disabled && open) {
-            setOpen(false);
-        }
-    }, [disabled, open]);
+    const isMenuOpen = open && !disabled;
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -39,11 +35,11 @@ export default function AutoHideTimerMenu({
                 setOpen(false);
             }
         };
-        if (open) {
+        if (isMenuOpen) {
             document.addEventListener('mousedown', handleClickOutside);
         }
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [open]);
+    }, [isMenuOpen]);
 
     const options = [0, 1000, 2000, 3000, 5000, 10000];
 
@@ -70,19 +66,19 @@ export default function AutoHideTimerMenu({
                 disabled={disabled}
                 onClick={() => {
                     if (disabled) return;
-                    setOpen(!open);
+                    setOpen(!isMenuOpen);
                 }}
                 className={`text-xs font-semibold px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/10 flex items-center gap-1.5 backdrop-blur-xl shadow-lg disabled:opacity-30 disabled:cursor-default ${disabled ? 'pointer-events-none' : ''}`}
                 title={t(lang, 'contextMenu.fullScreenAlbum')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="10" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                 </svg>
                 {hideDelayMs === 0 ? t(lang, 'player.autoHideNever') : `${hideDelayMs}ms`}
             </button>
             <AnimatePresence>
-                {open && (
+                {isMenuOpen && (
                     <motion.div
                         {...contentMotion}
                         className="absolute bottom-full right-0 mb-2 w-40 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1.5 flex flex-col"

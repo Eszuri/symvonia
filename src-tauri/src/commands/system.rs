@@ -63,13 +63,20 @@ const SW_HIDE: i32 = 0;
 #[cfg(windows)]
 const SWP_NOZORDER: u32 = 0x0004;
 
+static OVERLAY_EXPANDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub fn calculate_overlay_bounds(app: &AppHandle) -> (i32, i32, i32, i32) {
     let config = crate::commands::config::load_config(app);
-    let (w, h) = match config.overlay_size.as_str() {
-        "s" => (280, 115),
-        "l" => (400, 160),
-        "xl" => (460, 180),
-        _ => (340, 140),
+    let is_expanded = OVERLAY_EXPANDED.load(std::sync::atomic::Ordering::SeqCst);
+    let (w, h) = match (config.overlay_size.as_str(), is_expanded) {
+        ("s", true) => (280, 205),
+        ("s", false) => (280, 115),
+        ("l", true) => (400, 280),
+        ("l", false) => (400, 160),
+        ("xl", true) => (460, 315),
+        ("xl", false) => (460, 180),
+        (_, true) => (340, 245),
+        (_, false) => (340, 140),
     };
 
     #[cfg(windows)]
@@ -260,7 +267,7 @@ pub fn set_system_volume(app: AppHandle, value: u32) -> Result<(), String> {
 
         let config = crate::commands::config::load_config(&app);
         if config.overlay_enabled {
-            let _ = show_media_overlay(app.clone());
+            let _ = show_media_overlay(app.clone(), None);
         }
         let _ = app.emit("system-volume-changed", VolumeChangeEvent {
             volume: value.clamp(0, 100),
@@ -311,7 +318,7 @@ pub fn set_system_mute(app: AppHandle, mute: bool) -> Result<(), String> {
 
         let config = crate::commands::config::load_config(&app);
         if config.overlay_enabled {
-            let _ = show_media_overlay(app.clone());
+            let _ = show_media_overlay(app.clone(), None);
         }
         let _ = app.emit("system-volume-changed", VolumeChangeEvent {
             volume: current_vol,
@@ -717,7 +724,10 @@ pub fn get_app_environment() -> AppEnvironmentInfo {
 }
 
 #[tauri::command]
-pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
+pub fn show_media_overlay(app: AppHandle, expanded: Option<bool>) -> Result<(), String> {
+    if let Some(exp) = expanded {
+        OVERLAY_EXPANDED.store(exp, std::sync::atomic::Ordering::SeqCst);
+    }
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = handle.get_webview_window("media-overlay") {
@@ -752,7 +762,10 @@ pub fn show_media_overlay(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn update_media_overlay_bounds(app: AppHandle) -> Result<(), String> {
+pub fn update_media_overlay_bounds(app: AppHandle, expanded: Option<bool>) -> Result<(), String> {
+    if let Some(exp) = expanded {
+        OVERLAY_EXPANDED.store(exp, std::sync::atomic::Ordering::SeqCst);
+    }
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = handle.get_webview_window("media-overlay") {

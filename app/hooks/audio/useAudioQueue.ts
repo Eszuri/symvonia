@@ -49,6 +49,8 @@ export function useAudioQueue({
     const sortDirRef = useRef<string>(sortDir);
     const nameSourceRef = useRef<string>(nameSource);
     const formatsRef = useRef<string[]>(formats);
+    const onSongSelectedSyncRef = useRef(onSongSelectedSync);
+    const onSongSelectedMissingRef = useRef(onSongSelectedMissing);
 
     useEffect(() => {
         filesRef.current = files;
@@ -59,7 +61,9 @@ export function useAudioQueue({
         sortDirRef.current = sortDir;
         nameSourceRef.current = nameSource;
         formatsRef.current = formats;
-    }, [files, currentPath, selectedSong, folderSort, fileSort, sortDir, nameSource, formats]);
+        onSongSelectedSyncRef.current = onSongSelectedSync;
+        onSongSelectedMissingRef.current = onSongSelectedMissing;
+    }, [files, currentPath, selectedSong, folderSort, fileSort, sortDir, nameSource, formats, onSongSelectedSync, onSongSelectedMissing]);
 
     const listFiles = useCallback(async (dirPath: string): Promise<FileEntry[]> => {
         await libraryRootPromiseRef.current;
@@ -143,7 +147,7 @@ export function useAudioQueue({
             const targetSong = songFile || makeTempFileEntry(filePath);
             if (isMountedRef.current) {
                 setSelectedSong(targetSong);
-                onSongSelectedSync?.(filePath);
+                onSongSelectedSyncRef.current?.(filePath);
             }
             playlistRef.current = fileList.filter((f) => !f.is_dir);
             playlistFolderRef.current = songParent;
@@ -151,10 +155,10 @@ export function useAudioQueue({
             const tempFile = makeTempFileEntry(filePath);
             if (isMountedRef.current) {
                 setSelectedSong(tempFile);
-                onSongSelectedSync?.(filePath);
+                onSongSelectedSyncRef.current?.(filePath);
             }
         }
-    }, [listFiles, onSongSelectedSync, isMountedRef]);
+    }, [listFiles, isMountedRef]);
 
     const getNextSong = useCallback((shuffle: boolean, repeat: "off" | "all" | "one"): FileEntry | null => {
         const list = playlistRef.current;
@@ -235,11 +239,11 @@ export function useAudioQueue({
 
     // Cache invalidation listener
     useEffect(() => {
-        if (!isBrowserTauri()) return;
+        if (!isBrowserTauri() || !musicFolder) return;
         let disposed = false;
         let unlisten: (() => void) | null = null;
         void listenTauri<LibraryCacheInvalidatedEvent>("library-cache-invalidated", (event) => {
-            if (disposed || !musicFolder) return;
+            if (disposed) return;
             if (normalizePath(event.root_path) !== normalizePath(musicFolder)) return;
             const affected = event.affected_paths.map(normalizePath);
             const current = currentPathRef.current ? normalizePath(currentPathRef.current) : "";
@@ -247,7 +251,9 @@ export function useAudioQueue({
             const isAffected = (path: string) => affected.includes(path);
             const currentAffected = Boolean(current) && isAffected(current);
             const playlistAffected = Boolean(playlistFolder) && isAffected(playlistFolder);
-            if (currentAffected) void loadFiles(currentPathRef.current!);
+            if (currentAffected && currentPathRef.current) {
+                void loadFiles(currentPathRef.current);
+            }
             if (playlistAffected && playlistFolderRef.current) {
                 void listFiles(playlistFolderRef.current).then((result) => {
                     if (!isMountedRef.current) return;
@@ -256,19 +262,38 @@ export function useAudioQueue({
                     if (selected && !playlistRef.current.some((file) => file.path === selected.path)) {
                         selectedSongRef.current = null;
                         setSelectedSong(null);
-                        onSongSelectedMissing?.();
+                        onSongSelectedMissingRef.current?.();
                     }
                 }).catch(() => {});
             }
         }).then((cleanup) => {
-            if (disposed) cleanup();
-            else unlisten = cleanup;
+            if (disposed) {
+                try {
+                    const res: unknown = cleanup();
+                    if (res && typeof (res as { catch?: unknown }).catch === 'function') {
+                        (res as Promise<void>).catch(() => {});
+                    }
+                } catch {
+                    // Safe cleanup ignore
+                }
+            } else {
+                unlisten = cleanup;
+            }
         }).catch(() => {});
         return () => {
             disposed = true;
-            unlisten?.();
+            if (unlisten) {
+                try {
+                    const res: unknown = unlisten();
+                    if (res && typeof (res as { catch?: unknown }).catch === 'function') {
+                        (res as Promise<void>).catch(() => {});
+                    }
+                } catch {
+                    // Safe cleanup ignore
+                }
+            }
         };
-    }, [listFiles, loadFiles, musicFolder, isMountedRef, onSongSelectedMissing]);
+    }, [listFiles, loadFiles, musicFolder, isMountedRef]);
 
     // Load once when the path, sorting, or format filter changes.
     useEffect(() => {

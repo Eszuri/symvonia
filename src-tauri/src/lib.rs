@@ -1,6 +1,6 @@
 use std::io::{Read, Seek};
 use std::sync::atomic::Ordering;
-use tauri::Manager;
+use tauri::{Emitter, Listener, Manager};
 
 pub mod ai_lyrics_plugin_manager;
 pub mod audio;
@@ -215,6 +215,13 @@ pub fn run() {
             let tray = tray_builder.build(app)?;
             app.manage(tray);
 
+            let sync_handle = handle.clone();
+            handle.listen("media-overlay-request-sync", move |_| {
+                if let Some(meta) = commands::stream::get_latest_stream_meta_value() {
+                    let _ = sync_handle.emit("stream-metadata-sync", &meta);
+                }
+            });
+
             Ok(())
         })
         .on_page_load(|window, payload| {
@@ -277,6 +284,8 @@ pub fn run() {
             get_default_wallpaper_path,
             set_reset_on_close,
             open_webview_stream,
+            control_stream_playback,
+            get_latest_stream_metadata,
             get_bit_perfect_plugin_status,
             download_bit_perfect_plugin,
             cancel_bit_perfect_plugin_download,

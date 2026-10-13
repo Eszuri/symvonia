@@ -32,15 +32,18 @@ export default function SleepTimerMenu({lang, accentColor, hasTrack, timer, onOp
     const label = timer.mode === 'duration' ? countdown
         : timer.mode === 'track' ? t(lang, 'sleepTimer.trackBadge') : t(lang, 'sleepTimer.title');
 
-    useEffect(() => {
-        onOpenChange?.(open);
-        return () => {
-            if (open) onOpenChange?.(false);
-        };
-    }, [open, onOpenChange]);
+    const isAvailable = hasTrack || active;
+    const isMenuOpen = open && isAvailable;
 
     useEffect(() => {
-        if (!open) return;
+        onOpenChange?.(isMenuOpen);
+        return () => {
+            if (isMenuOpen) onOpenChange?.(false);
+        };
+    }, [isMenuOpen, onOpenChange]);
+
+    useEffect(() => {
+        if (!isMenuOpen) return;
         const outside = (event: PointerEvent) => {
             if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
         };
@@ -57,13 +60,7 @@ export default function SleepTimerMenu({lang, accentColor, hasTrack, timer, onOp
             document.removeEventListener('pointerdown', outside);
             document.removeEventListener('keydown', escape);
         };
-    }, [open]);
-
-    useEffect(() => {
-        if (!hasTrack && !active && open) {
-            setOpen(false);
-        }
-    }, [hasTrack, active, open]);
+    }, [isMenuOpen]);
 
     return (
         <div ref={containerRef} className="relative shrink-0" onKeyDown={event => {
@@ -75,12 +72,12 @@ export default function SleepTimerMenu({lang, accentColor, hasTrack, timer, onOp
             }
         }}>
             <button ref={triggerRef} type="button" onClick={() => {
-                if (!hasTrack && !active) return;
-                if (!open) setAfterTrack(timer.mode === 'track');
-                setOpen(!open);
+                if (!isAvailable) return;
+                if (!isMenuOpen) setAfterTrack(timer.mode === 'track');
+                setOpen(!isMenuOpen);
             }}
-                disabled={!hasTrack && !active}
-                aria-expanded={open} aria-controls={id}
+                disabled={!isAvailable}
+                aria-expanded={isMenuOpen} aria-controls={id}
                 aria-label={`${t(lang, 'sleepTimer.title')}: ${active ? label : t(lang, 'sleepTimer.off')}`}
                 title={t(lang, 'sleepTimer.title')}
                 className={`flex w-max items-center justify-center gap-1.5 h-9 min-w-9 whitespace-nowrap rounded-lg text-xs font-medium cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-default ${active ? `px-3 ${accent.bg15} ${accent.text400}` : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
@@ -90,7 +87,7 @@ export default function SleepTimerMenu({lang, accentColor, hasTrack, timer, onOp
                 </svg>
                 <span className={active ? 'tabular-nums' : 'sr-only'}>{label}</span>
             </button>
-            {open && (
+            {isMenuOpen && (
                 <div id={id} role="region" aria-label={t(lang, 'sleepTimer.title')}
                     className={`absolute right-0 bottom-full mb-2 ${active ? 'w-64' : 'w-80'} max-w-[calc(100vw-2rem)] z-50 rounded-xl border border-zinc-700/60 bg-zinc-900 p-4 shadow-2xl text-left`}>
                     <div className={`space-y-1 ${active ? 'text-center' : ''}`}>
