@@ -13,9 +13,6 @@ export interface UseAudioVolumeOptions {
     systemMuted: boolean;
     setSystemMuted: React.Dispatch<React.SetStateAction<boolean>>;
     lastLocalVolumeSetRef: React.RefObject<number>;
-    pauseIfMuted: boolean;
-    isPlaying: boolean;
-    setIsPlaying: (v: boolean) => void;
     audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
@@ -29,9 +26,6 @@ export function useAudioVolume({
     systemMuted,
     setSystemMuted,
     lastLocalVolumeSetRef,
-    pauseIfMuted,
-    isPlaying,
-    setIsPlaying,
     audioRef,
 }: UseAudioVolumeOptions) {
     const volumeModeRef = useRef<"app" | "system">(volumeMode);
@@ -46,9 +40,7 @@ export function useAudioVolume({
     const activeVolume = volumeMode === "system" ? systemVolume : appVolume;
 
     const isVolumeSilent = useCallback(() => {
-        return volumeMode === "app"
-            ? appVolume <= 0
-            : systemMuted || systemVolume <= 0;
+        return systemMuted || systemVolume <= 0 || (volumeMode === "app" && appVolume <= 0);
     }, [appVolume, systemMuted, systemVolume, volumeMode]);
 
     const setMinimumResumeVolume = useCallback(async () => {
@@ -138,43 +130,6 @@ export function useAudioVolume({
             audioRef.current.volume = 1;
         }
     }, [audioRef, volumeMode, appVolume]);
-
-    useEffect(() => {
-        if (!pauseIfMuted || !isPlaying) return;
-        const isZero =
-            volumeMode === "app" ? appVolume <= 0 : systemMuted || systemVolume <= 0;
-        if (isZero && audioRef.current) {
-            autoPausedBySilenceRef.current = true;
-            audioRef.current.pause();
-            setIsPlaying(false);
-        }
-    }, [
-        audioRef,
-        pauseIfMuted,
-        volumeMode,
-        appVolume,
-        systemVolume,
-        systemMuted,
-        isPlaying,
-        setIsPlaying,
-    ]);
-
-    useEffect(() => {
-        if (!pauseIfMuted || !autoPausedBySilenceRef.current) return;
-        const audio = audioRef.current;
-        if (!audio || !audio.src || !audio.paused) return;
-        const stillSilent =
-            volumeMode === "app" ? appVolume <= 0 : systemMuted || systemVolume <= 0;
-        if (stillSilent) return;
-        autoPausedBySilenceRef.current = false;
-        audio.play().catch(() => {
-            autoPausedBySilenceRef.current = true;
-        });
-    }, [audioRef, pauseIfMuted, volumeMode, appVolume, systemVolume, systemMuted]);
-
-    useEffect(() => {
-        if (!pauseIfMuted) autoPausedBySilenceRef.current = false;
-    }, [pauseIfMuted]);
 
     return {
         activeVolume,

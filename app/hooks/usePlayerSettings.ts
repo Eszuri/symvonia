@@ -361,7 +361,7 @@ export function usePlayerSettings() {
     }, []);
 
     useEffect(() => {
-        if (!isBrowserTauri() || volumeMode !== 'system') {
+        if (!isBrowserTauri()) {
             const frame = requestAnimationFrame(() => setSystemVolumeSynced(false));
             return () => cancelAnimationFrame(frame);
         }
@@ -453,7 +453,7 @@ export function usePlayerSettings() {
             volumeUnlisten?.();
             focusUnlisten?.();
         };
-    }, [language, volumeMode]);
+    }, [language]);
 
     useEffect(() => {
         if (!isBrowserTauri()) return;

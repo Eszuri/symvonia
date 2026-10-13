@@ -238,9 +238,6 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         systemMuted,
         setSystemMuted,
         lastLocalVolumeSetRef,
-        pauseIfMuted,
-        isPlaying,
-        setIsPlaying,
         audioRef,
     });
     const {
@@ -256,10 +253,12 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
     // Sub-hook: Audio Effects & DSP
     const {fadeVolumeTo, cancelFade, fadeAudioRef, fadeDurationRef} = useVolumeFade(audioRef, fadeAudio, fadeDuration);
     const isFadingOutRef = useRef(false);
-    const pausePlayback = useCallback(() => {
+    const pausePlayback = useCallback((immediate = false) => {
         if (!selectedSongRef.current) return;
         pauseRequestedRef.current = true;
         autoPausedBySilenceRef.current = false;
+        cancelFade();
+        isFadingOutRef.current = false;
         if (nativeEngineActiveRef.current) {
             bpSendCommandRef.current({command: "pause"}).catch(() => {});
             nativePlayingRef.current = false;
@@ -269,8 +268,13 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             return;
         }
         const audio = audioRef.current;
-        if (!audio || audio.paused) return;
-        cancelFade();
+        if (!audio) return;
+        if (immediate || audio.paused) {
+            audio.pause();
+            setIsPlaying(false);
+            setRuntimeStatus('paused');
+            return;
+        }
         isFadingOutRef.current = true;
         setIsPlaying(false);
         setRuntimeStatus('paused');
@@ -702,6 +706,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                         audio.volume = 0;
                         prepareAudio();
                         await audio.play();
+                        if (token !== playbackGenerationRef.current || pauseRequestedRef.current) return;
                         fadeVolumeTo(targetVol, fadeDurationRef.current);
                     } else {
                         audio.volume = targetVol;
@@ -710,6 +715,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                     }
                 }
 
+                if (token !== playbackGenerationRef.current || pauseRequestedRef.current) return;
                 autoPausedBySilenceRef.current = false;
                 restoredPendingPlayRef.current = false;
 
@@ -801,17 +807,20 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             isFadingOutRef.current = false;
             setIsPlaying(true);
             setRuntimeStatus('playing');
+            const generation = playbackGenerationRef.current;
             const resume = async () => {
                 let resumeVolume: number | null = null;
                 if (pauseIfMuted && isVolumeSilent()) {
                     resumeVolume = await setMinimumResumeVolume();
                 }
+                if (generation !== playbackGenerationRef.current || pauseRequestedRef.current) return;
                 const targetVol = volumeModeRef.current === "app" ? (resumeVolume ?? appVolume) : 1;
                 if (fadeAudioRef.current && fadeDurationRef.current > 0) {
                     if (audio.paused) {
                         audio.volume = 0;
                         prepareAudio();
                         await audio.play();
+                        if (generation !== playbackGenerationRef.current || pauseRequestedRef.current) return;
                     }
                     fadeVolumeTo(targetVol, fadeDurationRef.current);
                 } else {
@@ -821,6 +830,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                         await audio.play();
                     }
                 }
+                if (generation !== playbackGenerationRef.current || pauseRequestedRef.current) return;
                 autoPausedBySilenceRef.current = false;
 
                 if (restoredPendingPlayRef.current) {
@@ -829,7 +839,12 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                     if (meta) applyWallpaper(meta).catch(() => {});
                 }
             };
-            resume().catch(() => {});
+            resume().catch((error: unknown) => {
+                if (generation !== playbackGenerationRef.current || pauseRequestedRef.current) return;
+                setIsPlaying(false);
+                setRuntimeStatus('error');
+                setRuntimeError({code: 'PLAYBACK_FAILED', message: String(error)});
+            });
         } else {
             pausePlayback();
         }
@@ -852,6 +867,24 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         setMinimumResumeVolume,
         volumeModeRef,
     ]);
+
+    useEffect(() => {
+        if (!pauseIfMuted) {
+            autoPausedBySilenceRef.current = false;
+            return;
+        }
+        if (isVolumeSilent()) {
+            if (isPlaying || isFadingOutRef.current) {
+                pausePlayback(true);
+                autoPausedBySilenceRef.current = isPlaying;
+            }
+            return;
+        }
+        if (autoPausedBySilenceRef.current) {
+            autoPausedBySilenceRef.current = false;
+            if (!isPlaying) togglePlayPause();
+        }
+    }, [pauseIfMuted, isPlaying, isVolumeSilent, pausePlayback, togglePlayPause, autoPausedBySilenceRef]);
 
     const playNext = useCallback(() => {
         const nextFile = getNextSong(shuffleRef.current, repeatRef.current);
