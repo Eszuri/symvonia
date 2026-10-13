@@ -246,9 +246,10 @@ export default function GeneralSection({
             <SettingGroup title={t(lang, 'general.group.volume')}>
                 <SettingRow
                     title={t(lang, 'general.volumeMode.title')}
-                        description={nativeOutputActive
-                            ? t(lang, 'general.volumeMode.nativeDisabled')
-                            : t(lang, 'general.volumeMode.desc')}
+                    description={nativeOutputActive
+                        ? t(lang, 'general.volumeMode.nativeDisabled')
+                        : t(lang, 'general.volumeMode.desc')}
+                    descriptionClassName={nativeOutputActive ? 'text-amber-400' : undefined}
                 >
                     <SelectStub
                         ariaLabel={t(lang, 'general.volumeMode.title')}
@@ -305,28 +306,20 @@ export default function GeneralSection({
                             ? t(lang, 'general.fadeAudio.disabledNative')
                             : t(lang, 'general.fadeAudio.desc')
                     }
+                    descriptionClassName={outputMode !== 'html_audio' ? 'text-amber-400' : undefined}
                 >
-                    <div className="flex flex-col items-end gap-1.5">
-                        <div>
-                            <SelectStub
-                                ariaLabel={t(lang, 'general.fadeAudio.title')}
-                                disabled={outputMode !== 'html_audio'}
-                                options={[
-                                    ['true', t(lang, 'general.pauseIfMuted.on')],
-                                    ['false', t(lang, 'general.pauseIfMuted.off')],
-                                    ]}
-                                value={String(fadeAudio)}
-                                onChange={(v) => setFadeAudio(v === 'true')}
-                                accent={accent}
-                                accentColor={accentColor}
-                            />
-                        </div>
-                        {outputMode !== 'html_audio' && (
-                            <span className="text-[10px] font-semibold text-amber-400/90 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                🔒 {t(lang, 'general.fadeAudio.disabledNative')}
-                            </span>
-                        )}
-                    </div>
+                    <SelectStub
+                        ariaLabel={t(lang, 'general.fadeAudio.title')}
+                        disabled={outputMode !== 'html_audio'}
+                        options={[
+                            ['true', t(lang, 'general.pauseIfMuted.on')],
+                            ['false', t(lang, 'general.pauseIfMuted.off')],
+                        ]}
+                        value={String(fadeAudio)}
+                        onChange={(v) => setFadeAudio(v === 'true')}
+                        accent={accent}
+                        accentColor={accentColor}
+                    />
                 </SettingRow>
                 {fadeAudio && outputMode === 'html_audio' && (
                     <SettingRow
