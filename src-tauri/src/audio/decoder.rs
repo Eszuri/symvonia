@@ -187,13 +187,16 @@ impl MfDecoder {
 
     pub fn seek(&mut self, seconds: f64) -> Result<(), String> {
         let clamped = if self.duration_secs > 0.0 {
-            seconds.clamp(0.0, self.duration_secs)
+            seconds.clamp(0.0, (self.duration_secs - 0.05).max(0.0))
         } else {
             seconds.max(0.0)
         };
         let hns = (clamped * 10_000_000.0) as i64;
 
         unsafe {
+            let first_audio = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
+            let _ = self.reader.Flush(first_audio);
+
             let var = PROPVARIANT::from(hns);
 
             self.reader
@@ -309,9 +312,13 @@ impl MfDecoder {
                     continue;
                 };
 
-                let buffer: IMFMediaBuffer = sample
-                    .ConvertToContiguousBuffer()
-                    .map_err(|e| format!("ConvertToContiguousBuffer failed: {}", e))?;
+                if sample.GetBufferCount().unwrap_or(0) == 0 {
+                    continue;
+                }
+
+                let Ok(buffer): Result<IMFMediaBuffer, _> = sample.ConvertToContiguousBuffer() else {
+                    continue;
+                };
 
                 let mut data_ptr: *mut u8 = std::ptr::null_mut();
                 let mut current_len: u32 = 0;

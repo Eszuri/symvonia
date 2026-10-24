@@ -10,8 +10,7 @@ pub mod media_access;
 mod taskbar;
 pub mod migration;
 pub mod sidecar_lyrics;
-pub mod sidecar_wallpaper;
-pub mod wallpaper_plugin_manager;
+pub mod wallpaper;
 
 pub use commands::*;
 pub use library_cache::{clear_library_cache, invalidate_library_directory, set_library_root};
@@ -132,12 +131,9 @@ pub fn run() {
                 }
             }
 
-            // Auto-start Direct3D 11 Wallpaper Engine if enabled and installed
-            let is_wallpaper_installed = wallpaper_plugin_manager::get_status(handle)
-                .map(|s| s.installed)
-                .unwrap_or(false);
-            if is_wallpaper_installed && initial_config.wallpaper_engine_enabled {
-                let _ = sidecar_wallpaper::start_engine(
+            // Auto-start Built-in Direct3D 11 Wallpaper Engine if enabled
+            if initial_config.wallpaper_engine_enabled {
+                let _ = wallpaper::start_engine(
                     handle,
                     Some(initial_config.wallpaper_engine_fps),
                     Some(initial_config.wallpaper_engine_intensity),
@@ -321,10 +317,6 @@ pub fn run() {
             clean_all_app_data,
             get_app_environment,
             get_wallpaper_plugin_status,
-            download_wallpaper_plugin,
-            cancel_wallpaper_plugin_download,
-            install_wallpaper_plugin_from_file,
-            uninstall_wallpaper_plugin,
             start_wallpaper_engine,
             stop_wallpaper_engine,
             pause_wallpaper_engine,
@@ -503,12 +495,11 @@ pub fn run() {
     app.run(|_handle, event| {
         #[cfg(windows)]
         if let tauri::RunEvent::Exit = event {
-            // Stop the native audio engine and kill remaining sidecar engines/downloads.
+            // Stop the native audio & wallpaper engines and kill remaining sidecar engines/downloads.
             let _ = audio::engine::stop_engine();
             sidecar_lyrics::stop_engine();
-            sidecar_wallpaper::stop_engine();
+            wallpaper::stop_engine();
             ai_lyrics_plugin_manager::cancel_download();
-            wallpaper_plugin_manager::cancel_download();
             if commands::wallpaper::RESET_ON_CLOSE.load(Ordering::SeqCst) {
                 let _ = commands::wallpaper::clear_wallpaper_internal(true);
             }

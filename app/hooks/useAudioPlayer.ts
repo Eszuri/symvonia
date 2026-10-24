@@ -143,6 +143,10 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
     const nativeEngineActiveRef = useRef(false);
     const nativeEngineModeRef = useRef<NativeOutputMode | null>(null);
     const activeNativeRequestRef = useRef<string | null>(null);
+    const lastNativeSeekAtRef = useRef(0);
+    const lastNativeSeekSentAtRef = useRef(0);
+    const pendingNativeSeekPosRef = useRef<number | null>(null);
+    const seekThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const nativePlayingRef = useRef(false);
     const nativeStateRef = useRef<"idle" | "playing" | "paused" | "stopped">("idle");
     const nativeSuppressedRef = useRef(false);
@@ -987,9 +991,15 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
         onProgress: (e) => {
             if (!isCurrentNativeEvent(e)) return;
             if (!Number.isFinite(e.position) || !Number.isFinite(e.duration)) return;
-            if (nativeStateRef.current === 'paused' || !nativePlayingRef.current) return;
-            setCurrentTime(Math.max(0, e.position));
             if (e.duration > 0) setDuration(e.duration);
+            if (nativeStateRef.current === 'paused' || !nativePlayingRef.current) return;
+            if (
+                Date.now() - lastNativeSeekAtRef.current < 350 &&
+                Math.abs(e.position - currentTimeRef.current) > 0.75
+            ) {
+                return;
+            }
+            setCurrentTime(Math.max(0, e.position));
             const song = selectedSongRef.current;
             if (song && e.position > 0) {
                 const now = Date.now();
@@ -1316,6 +1326,8 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
 
     const seekTo = useCallback((t: number) => {
         const clamped = Math.max(0, t);
+        const now = Date.now();
+        lastNativeSeekAtRef.current = now;
         setCurrentTime(clamped);
         currentTimeRef.current = clamped;
         const song = selectedSongRef.current;
@@ -1323,11 +1335,31 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             saveSessionState({
                 filePath: song.path,
                 currentTime: clamped,
-                timestamp: Date.now(),
+                timestamp: now,
             });
         }
         if (nativeEngineActiveRef.current) {
-            bpSendCommandRef.current({command: "seek", position: clamped}).catch(() => {});
+            pendingNativeSeekPosRef.current = clamped;
+            const elapsed = now - lastNativeSeekSentAtRef.current;
+            if (elapsed >= 60) {
+                if (seekThrottleTimerRef.current) {
+                    clearTimeout(seekThrottleTimerRef.current);
+                    seekThrottleTimerRef.current = null;
+                }
+                lastNativeSeekSentAtRef.current = now;
+                pendingNativeSeekPosRef.current = null;
+                bpSendCommandRef.current({command: "seek", position: clamped}).catch(() => {});
+            } else if (!seekThrottleTimerRef.current) {
+                seekThrottleTimerRef.current = setTimeout(() => {
+                    seekThrottleTimerRef.current = null;
+                    const target = pendingNativeSeekPosRef.current;
+                    if (target !== null) {
+                        pendingNativeSeekPosRef.current = null;
+                        lastNativeSeekSentAtRef.current = Date.now();
+                        bpSendCommandRef.current({command: "seek", position: target}).catch(() => {});
+                    }
+                }, Math.max(16, 60 - elapsed));
+            }
         } else if (audioRef.current) {
             audioRef.current.currentTime = clamped;
         }

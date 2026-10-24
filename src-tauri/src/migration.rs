@@ -15,7 +15,13 @@ pub fn migrate_legacy_plugins(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    for legacy_folder in ["engine", "bit-perfect", "equalizer", "tag-editor"] {
+    for legacy_folder in [
+        "engine",
+        "bit-perfect",
+        "equalizer",
+        "tag-editor",
+        "wallpaper-engine",
+    ] {
         let dir = plugins_dir.join(legacy_folder);
         if dir.exists() {
             let _ = fs::remove_dir_all(&dir);

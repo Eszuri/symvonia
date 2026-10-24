@@ -11,7 +11,7 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER, STGM_READ,
 };
 use windows::Win32::System::Threading::{
-    AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW, CreateEventW,
+    AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW, CreateEventW, ResetEvent,
     WaitForSingleObject,
 };
 use windows::Win32::UI::Shell::PropertiesSystem::PROPERTYKEY;
@@ -21,6 +21,7 @@ const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: GUID =
     GUID::from_u128(0x00000003_0000_0010_8000_00aa00389b71);
 
 // HRESULTs for WASAPI
+const AUDCLNT_E_BUFFER_TOO_LARGE: i32 = -2004287482; // 0x88890006
 const AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED: i32 = -2004287463; // 0x88890019
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -337,6 +338,7 @@ impl WasapiOutput {
     pub fn start(&mut self) -> Result<(), String> {
         if !self.started {
             unsafe {
+                let _ = ResetEvent(self.event_handle);
                 self.client
                     .Start()
                     .map_err(|e| format!("IAudioClient::Start failed: {}", e))?;
@@ -359,6 +361,7 @@ impl WasapiOutput {
         self.stop();
         unsafe {
             let _ = self.client.Reset();
+            let _ = ResetEvent(self.event_handle);
         }
     }
 
@@ -404,22 +407,36 @@ impl WasapiOutput {
         let total_samples = frames_to_write as usize * ch;
         scratch.resize(total_samples, 0.0);
 
-        let samples_read = fill_fn(&mut scratch[..total_samples])?;
-        if samples_read < total_samples {
-            scratch[samples_read..total_samples].fill(0.0);
-        }
-
         unsafe {
-            let dst_ptr = self
-                .render_client
-                .GetBuffer(frames_to_write)
-                .map_err(|e| format!("IAudioRenderClient::GetBuffer failed: {}", e))?;
+            let dst_ptr = match self.render_client.GetBuffer(frames_to_write) {
+                Ok(ptr) => ptr,
+                Err(e) if e.code().0 == AUDCLNT_E_BUFFER_TOO_LARGE => {
+                    return Ok(0);
+                }
+                Err(e) => {
+                    return Err(format!("IAudioRenderClient::GetBuffer failed: {}", e));
+                }
+            };
+
+            let samples_read = match fill_fn(&mut scratch[..total_samples]) {
+                Ok(n) => n,
+                Err(e) => {
+                    let _ = self
+                        .render_client
+                        .ReleaseBuffer(frames_to_write, AUDCLNT_BUFFERFLAGS_SILENT.0 as u32);
+                    return Err(e);
+                }
+            };
 
             if samples_read == 0 {
                 let _ = self
                     .render_client
                     .ReleaseBuffer(frames_to_write, AUDCLNT_BUFFERFLAGS_SILENT.0 as u32);
                 return Ok(0);
+            }
+
+            if samples_read < total_samples {
+                scratch[samples_read..total_samples].fill(0.0);
             }
 
             let bytes_per_sample = self.sample_format.container_bytes_per_sample() as usize;
@@ -431,10 +448,9 @@ impl WasapiOutput {
             self.render_client
                 .ReleaseBuffer(frames_to_write, 0)
                 .map_err(|e| format!("IAudioRenderClient::ReleaseBuffer failed: {}", e))?;
+            let frames_decoded = if ch > 0 { (samples_read / ch) as u32 } else { 0 };
+            Ok(frames_decoded)
         }
-
-        let frames_decoded = if ch > 0 { (samples_read / ch) as u32 } else { 0 };
-        Ok(frames_decoded)
     }
 }
 

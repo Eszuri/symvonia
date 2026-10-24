@@ -60,31 +60,35 @@ pub fn get_default_wallpaper_path() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub fn set_wallpaper_fit_mode(mode: String) -> Result<(), String> {
-    let normalized = match mode.to_lowercase().as_str() {
-        "fit" => "fit",
-        "stretch" => "stretch",
-        "center" => "center",
-        "tile" => "tile",
-        "span" => "span",
-        _ => "fill",
-    };
+pub async fn set_wallpaper_fit_mode(mode: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let normalized = match mode.to_lowercase().as_str() {
+            "fit" => "fit",
+            "stretch" => "stretch",
+            "center" => "center",
+            "tile" => "tile",
+            "span" => "span",
+            _ => "fill",
+        };
 
-    if let Ok(mut guard) = WALLPAPER_FIT_MODE.lock() {
-        *guard = normalized.to_string();
-    }
+        if let Ok(mut guard) = WALLPAPER_FIT_MODE.lock() {
+            *guard = normalized.to_string();
+        }
 
-    #[cfg(windows)]
-    set_wallpaper_registry_fit(normalized);
+        if crate::wallpaper::is_running() {
+            let _ = crate::wallpaper::set_fit_mode(normalized);
+        } else {
+            #[cfg(windows)]
+            set_wallpaper_registry_fit(normalized);
 
-    // Reapply current wallpaper to immediately update desktop display
-    reapply_current_wallpaper();
+            // Reapply current wallpaper to immediately update desktop display
+            reapply_current_wallpaper();
+        }
 
-    if crate::sidecar_wallpaper::is_running() {
-        let _ = crate::sidecar_wallpaper::set_fit_mode(normalized);
-    }
-
-    Ok(())
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -112,8 +116,8 @@ pub fn set_wallpaper_effect(effect: String) -> Result<(), String> {
         *guard = normalized.to_string();
     }
 
-    if crate::sidecar_wallpaper::is_running() {
-        let _ = crate::sidecar_wallpaper::set_effect(normalized);
+    if crate::wallpaper::is_running() {
+        let _ = crate::wallpaper::set_effect(normalized);
     }
 
     Ok(())
@@ -143,8 +147,8 @@ pub fn set_wallpaper_transition(transition: String) -> Result<(), String> {
         *guard = normalized.to_string();
     }
 
-    if crate::sidecar_wallpaper::is_running() {
-        let _ = crate::sidecar_wallpaper::set_transition(normalized);
+    if crate::wallpaper::is_running() {
+        let _ = crate::wallpaper::set_transition(normalized);
     }
 
     Ok(())
@@ -313,8 +317,8 @@ pub fn clear_wallpaper_internal(apply_to_system: bool) -> Result<(), String> {
         *cur_guard = Some(bmp_path.to_string_lossy().to_string());
     }
 
-    if crate::sidecar_wallpaper::is_running() {
-        let _ = crate::sidecar_wallpaper::set_texture(&bmp_path.to_string_lossy());
+    if crate::wallpaper::is_running() {
+        let _ = crate::wallpaper::set_texture(&bmp_path.to_string_lossy());
     }
 
     if let Ok(entries) = std::fs::read_dir(&temp_dir) {
@@ -372,8 +376,8 @@ pub async fn set_wallpaper(cover_b64: String, apply_to_system: Option<bool>) -> 
             *cur_guard = Some(bmp_path.to_string_lossy().to_string());
         }
 
-        if crate::sidecar_wallpaper::is_running() {
-            let _ = crate::sidecar_wallpaper::set_texture(&bmp_path.to_string_lossy());
+        if crate::wallpaper::is_running() {
+            let _ = crate::wallpaper::set_texture(&bmp_path.to_string_lossy());
         }
 
         if let Ok(entries) = std::fs::read_dir(&temp_dir) {
@@ -393,10 +397,10 @@ pub async fn set_wallpaper(cover_b64: String, apply_to_system: Option<bool>) -> 
     .map_err(|e| format!("Task error: {}", e))?
 }
 
-// ─── Dynamic Live Wallpaper Engine Commands ─────────────────────────────────
+// ─── Dynamic Live Wallpaper Engine Commands (Native Direct3D 11) ────────────
 
 #[tauri::command]
-pub fn start_wallpaper_engine(
+pub async fn start_wallpaper_engine(
     app: tauri::AppHandle,
     fps: Option<f64>,
     intensity: Option<f64>,
@@ -404,71 +408,79 @@ pub fn start_wallpaper_engine(
     fit_mode: Option<String>,
     effect: Option<String>,
     transition: Option<String>,
-) -> Result<crate::sidecar_wallpaper::WallpaperEngineState, String> {
-    let mode = fit_mode.or_else(|| {
-        WALLPAPER_FIT_MODE.lock().ok().and_then(|m| if m.is_empty() { None } else { Some(m.clone()) })
-    });
-    let eff = effect.or_else(|| {
-        WALLPAPER_EFFECT.lock().ok().and_then(|e| if e.is_empty() { None } else { Some(e.clone()) })
-    });
-    let tr = transition.or_else(|| {
-        WALLPAPER_TRANSITION.lock().ok().and_then(|t| if t.is_empty() { None } else { Some(t.clone()) })
-    });
-    let tex = texture_path
-        .filter(|p| !p.trim().is_empty())
-        .or_else(|| {
-            CURRENT_WALLPAPER_BMP_PATH
-                .lock()
-                .ok()
-                .and_then(|c| c.clone())
-                .filter(|p| Path::new(p).exists())
-        })
-        .or_else(|| {
-            DEFAULT_WALLPAPER_PATH
-                .lock()
-                .ok()
-                .and_then(|d| d.clone())
-                .filter(|p| Path::new(p).exists())
+) -> Result<crate::wallpaper::WallpaperEngineState, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mode = fit_mode.or_else(|| {
+            WALLPAPER_FIT_MODE.lock().ok().and_then(|m| if m.is_empty() { None } else { Some(m.clone()) })
         });
-    crate::sidecar_wallpaper::start_engine(&app, fps, intensity, tex, mode, eff, tr)
+        let eff = effect.or_else(|| {
+            WALLPAPER_EFFECT.lock().ok().and_then(|e| if e.is_empty() { None } else { Some(e.clone()) })
+        });
+        let tr = transition.or_else(|| {
+            WALLPAPER_TRANSITION.lock().ok().and_then(|t| if t.is_empty() { None } else { Some(t.clone()) })
+        });
+        let tex = texture_path
+            .filter(|p| !p.trim().is_empty())
+            .or_else(|| {
+                CURRENT_WALLPAPER_BMP_PATH
+                    .lock()
+                    .ok()
+                    .and_then(|c| c.clone())
+                    .filter(|p| Path::new(p).exists())
+            })
+            .or_else(|| {
+                DEFAULT_WALLPAPER_PATH
+                    .lock()
+                    .ok()
+                    .and_then(|d| d.clone())
+                    .filter(|p| Path::new(p).exists())
+            });
+        crate::wallpaper::start_engine(&app, fps, intensity, tex, mode, eff, tr)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-pub fn stop_wallpaper_engine() -> Result<(), String> {
-    crate::sidecar_wallpaper::stop_engine();
+pub async fn stop_wallpaper_engine() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::wallpaper::stop_engine();
 
-    // Reapply native wallpaper so WorkerW DirectX overlay is removed immediately
-    if let Ok(guard) = CURRENT_WALLPAPER_BMP_PATH.lock() {
-        if let Some(ref p) = *guard {
-            let path = Path::new(p);
-            if path.exists() {
-                let _ = apply_wallpaper(path);
+        // Reapply native wallpaper so WorkerW DirectX overlay is removed immediately
+        if let Ok(guard) = CURRENT_WALLPAPER_BMP_PATH.lock() {
+            if let Some(ref p) = *guard {
+                let path = Path::new(p);
+                if path.exists() {
+                    let _ = apply_wallpaper(path);
+                } else {
+                    let _ = clear_wallpaper_internal(true);
+                }
             } else {
                 let _ = clear_wallpaper_internal(true);
             }
         } else {
             let _ = clear_wallpaper_internal(true);
         }
-    } else {
-        let _ = clear_wallpaper_internal(true);
-    }
 
-    Ok(())
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 pub fn pause_wallpaper_engine() -> Result<(), String> {
-    crate::sidecar_wallpaper::pause_engine()
+    crate::wallpaper::pause_engine()
 }
 
 #[tauri::command]
 pub fn resume_wallpaper_engine() -> Result<(), String> {
-    crate::sidecar_wallpaper::resume_engine()
+    crate::wallpaper::resume_engine()
 }
 
 #[tauri::command]
 pub fn set_wallpaper_engine_texture(path: String) -> Result<(), String> {
-    crate::sidecar_wallpaper::set_texture(&path)
+    crate::wallpaper::set_texture(&path)
 }
 
 #[tauri::command]
@@ -476,7 +488,7 @@ pub fn set_wallpaper_engine_fit_mode(mode: String) -> Result<(), String> {
     if let Ok(mut guard) = WALLPAPER_FIT_MODE.lock() {
         *guard = mode.clone();
     }
-    crate::sidecar_wallpaper::set_fit_mode(&mode)
+    crate::wallpaper::set_fit_mode(&mode)
 }
 
 #[tauri::command]
@@ -484,7 +496,7 @@ pub fn set_wallpaper_engine_effect(effect: String) -> Result<(), String> {
     if let Ok(mut guard) = WALLPAPER_EFFECT.lock() {
         *guard = effect.clone();
     }
-    crate::sidecar_wallpaper::set_effect(&effect)
+    crate::wallpaper::set_effect(&effect)
 }
 
 #[tauri::command]
@@ -492,25 +504,25 @@ pub fn set_wallpaper_engine_transition(transition: String) -> Result<(), String>
     if let Ok(mut guard) = WALLPAPER_TRANSITION.lock() {
         *guard = transition.clone();
     }
-    crate::sidecar_wallpaper::set_transition(&transition)
+    crate::wallpaper::set_transition(&transition)
 }
 
 #[tauri::command]
 pub fn set_wallpaper_engine_fps(fps: f64) -> Result<(), String> {
-    crate::sidecar_wallpaper::set_fps(fps)
+    crate::wallpaper::set_fps(fps)
 }
 
 #[tauri::command]
 pub fn set_wallpaper_engine_intensity(intensity: f64) -> Result<(), String> {
-    crate::sidecar_wallpaper::set_intensity(intensity)
+    crate::wallpaper::set_intensity(intensity)
 }
 
 #[tauri::command]
-pub fn get_wallpaper_engine_state() -> crate::sidecar_wallpaper::WallpaperEngineState {
-    crate::sidecar_wallpaper::get_state()
+pub fn get_wallpaper_engine_state() -> crate::wallpaper::WallpaperEngineState {
+    crate::wallpaper::get_state()
 }
 
 #[tauri::command]
 pub fn is_wallpaper_engine_running() -> bool {
-    crate::sidecar_wallpaper::is_running()
+    crate::wallpaper::is_running()
 }

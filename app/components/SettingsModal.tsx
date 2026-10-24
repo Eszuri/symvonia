@@ -20,7 +20,6 @@ import SortSection from './settings/SortSection';
 import StyleSection from './settings/StyleSection';
 import {getSections} from './settings/sectionsConfig';
 import {useAiLyricsPlugin} from '../hooks/useAiLyricsPlugin';
-import {useWallpaperPlugin} from '../hooks/useWallpaperPlugin';
 import type {SectionId, SettingsModalProps} from './settings/types';
 
 export default function SettingsModal({
@@ -129,20 +128,15 @@ export default function SettingsModal({
     }, [open, onClose]);
 
     const {pluginStatus: aiPluginStatus} = useAiLyricsPlugin();
-    const {pluginStatus: wallpaperPluginStatus} = useWallpaperPlugin();
     const isAiPluginInstalled = aiPluginStatus?.installed === true;
-    const isWallpaperPluginInstalled = wallpaperPluginStatus?.installed === true;
 
     const effectiveActiveSection =
         (activeSection === 'lyrics' && !isAiPluginInstalled)
             ? 'plugin'
-            : (activeSection === 'wallpaper' && !isWallpaperPluginInstalled)
-                ? 'plugin'
-                : activeSection;
+            : activeSection;
 
     const sections = getSections(lang).filter(s =>
-        (s.id !== 'lyrics' || isAiPluginInstalled) &&
-        (s.id !== 'wallpaper' || isWallpaperPluginInstalled)
+        s.id !== 'lyrics' || isAiPluginInstalled
     );
 
     return (
@@ -263,7 +257,7 @@ export default function SettingsModal({
                                         outputMode={outputMode}
                                         nativeOutputActive={outputMode === 'wasapi_exclusive' || audioRuntime.effectiveMode === 'wasapi_exclusive'}
                                         audioBusy={Boolean(audioRuntime.busy || audioRuntime.status === 'stopping' || audioRuntime.status === 'starting' || audioRuntime.status === 'loading')}
-                                        hideWallpaperGroup={isWallpaperPluginInstalled}
+                                        hideWallpaperGroup={true}
                                     />
                                 )}
                                 {effectiveActiveSection === 'storage' && (
@@ -340,7 +334,7 @@ export default function SettingsModal({
                                         accentColor={accentColor}
                                     />
                                 )}
-                                {effectiveActiveSection === 'wallpaper' && isWallpaperPluginInstalled && (
+                                {effectiveActiveSection === 'wallpaper' && (
                                     <WallpaperSection
                                         lang={lang}
                                         accentColor={accentColor}

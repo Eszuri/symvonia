@@ -47,6 +47,7 @@ export default function WallpaperSection({
     const {
         engineState,
         isEngineRunning,
+        isBusy,
         startEngine,
         stopEngine,
         setFitMode,
@@ -56,6 +57,7 @@ export default function WallpaperSection({
     } = useWallpaperPlugin();
 
     const hasUserSelectedModeRef = useRef(false);
+    const [isUpdatingFit, setIsUpdatingFit] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [wallpaperMode, setWallpaperMode] = useState<'system' | 'direct3d'>(() => {
         return (isEngineRunning || isWallpaperEngineActive()) ? 'direct3d' : 'system';
@@ -109,9 +111,15 @@ export default function WallpaperSection({
     };
 
     const handleFitModeChange = async (mode: string) => {
+        if (isUpdatingFit) return;
         const fit = mode as WallpaperFitMode;
         setWallpaperFitMode?.(fit);
-        await setFitMode(mode);
+        setIsUpdatingFit(true);
+        try {
+            await setFitMode(mode);
+        } finally {
+            setIsUpdatingFit(false);
+        }
     };
 
     const handleEffectChange = async (effectStr: string) => {
@@ -208,9 +216,14 @@ export default function WallpaperSection({
                                 type="button"
                                 role="radio"
                                 aria-checked={isSelected}
-                                onClick={() => {
+                                disabled={isBusy}
+                                onClick={async () => {
+                                    if (isBusy) return;
                                     hasUserSelectedModeRef.current = true;
                                     setWallpaperMode(card.id);
+                                    if (card.id === 'system' && isEngineRunning) {
+                                        await stopEngine();
+                                    }
                                 }}
                                 style={{
                                     borderColor: isSelected
@@ -225,7 +238,7 @@ export default function WallpaperSection({
                                         ? `0 8px 24px -6px ${accent.hex500}30`
                                         : undefined,
                                 }}
-                                className={`relative p-4 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer select-none hover:border-zinc-500/80 hover:bg-zinc-900/80 group active:scale-[0.99] min-h-[135px]`}
+                                className={`relative p-4 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer select-none hover:border-zinc-500/80 hover:bg-zinc-900/80 group active:scale-[0.99] min-h-[135px] disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none`}
                             >
                                 {/* Top row: Icon */}
                                 <div className="flex items-start justify-between gap-2 w-full">
@@ -309,6 +322,7 @@ export default function WallpaperSection({
 
                                     <div className="shrink-0">
                                         <SelectStub
+                                            disabled={isUpdatingFit || isBusy}
                                             options={[
                                                 ['fill', t(lang, 'general.wallpaperFit.fill')],
                                                 ['fit', t(lang, 'general.wallpaperFit.fit')],
@@ -560,6 +574,7 @@ export default function WallpaperSection({
                                         checked={isEngineRunning}
                                         onChange={handleToggleEngine}
                                         accent={accent}
+                                        disabled={isBusy}
                                     />
                                 </div>
                             </div>
@@ -568,7 +583,7 @@ export default function WallpaperSection({
                         {/* Detailed Engine Configurations (Disabled & Dimmed when nonaktif) */}
                         <div
                             className={`transition-all duration-300 ${
-                                !isEngineRunning
+                                !isEngineRunning || isBusy
                                     ? 'opacity-35 pointer-events-none select-none grayscale-[30%]'
                                     : 'opacity-100'
                             }`}
@@ -580,7 +595,7 @@ export default function WallpaperSection({
                                     description={t(lang, 'wallpaper.transition.desc')}
                                 >
                                     <SelectStub
-                                        disabled={!isEngineRunning}
+                                        disabled={!isEngineRunning || isBusy}
                                         options={[
                                             ['fade', t(lang, 'wallpaper.transition.fade')],
                                             ['zoom_in', t(lang, 'wallpaper.transition.zoom_in')],
@@ -602,7 +617,7 @@ export default function WallpaperSection({
                                     description={t(lang, 'wallpaper.effect.desc')}
                                 >
                                     <SelectStub
-                                        disabled={!isEngineRunning}
+                                        disabled={!isEngineRunning || isBusy}
                                         options={[
                                             ['none', t(lang, 'wallpaper.effect.none')],
                                             ['reactive_glow', t(lang, 'wallpaper.effect.reactive_glow')],
@@ -625,7 +640,7 @@ export default function WallpaperSection({
                                     description={t(lang, 'wallpaper.fit.desc')}
                                 >
                                     <SelectStub
-                                        disabled={!isEngineRunning}
+                                        disabled={!isEngineRunning || isBusy || isUpdatingFit}
                                         options={[
                                             ['fill', t(lang, 'wallpaper.fit.fill')],
                                             ['fit', t(lang, 'wallpaper.fit.fit')],
@@ -653,7 +668,7 @@ export default function WallpaperSection({
                                                 min="0"
                                                 max="2"
                                                 step="0.1"
-                                                disabled={!isEngineRunning}
+                                                disabled={!isEngineRunning || isBusy}
                                                 value={engineState.intensity ?? 1.0}
                                                 onChange={(e) => handleIntensityChange(parseFloat(e.target.value))}
                                                 style={{

@@ -608,10 +608,11 @@ impl AudioWorker {
         };
 
         let was_playing = self.state == PlaybackState::Playing;
-        let vol = self.volume;
 
         if let Some(ref mut s) = self.session {
-            s.output.reset();
+            if !was_playing {
+                s.output.reset();
+            }
             if let Err(e) = s.decoder.seek(pos) {
                 let mode = s.mode.clone();
                 let path = s.path.clone();
@@ -630,18 +631,12 @@ impl AudioWorker {
             }
             self.draining_eof = false;
 
-            if was_playing {
-                let init_frames = s.output.buffer_frames;
-                let _ = s.output.write_frames(init_frames, vol, &mut self.scratch, |buf| {
-                    s.decoder.read_samples(buf)
-                });
-                let _ = s.output.start();
-                s.needs_prefill_on_resume = false;
-            } else {
+            if !was_playing {
                 s.needs_prefill_on_resume = true;
             }
         }
 
+        self.last_progress_emit = Instant::now();
         self.emit_current_progress();
     }
 
@@ -802,17 +797,29 @@ fn run_worker_loop(app: AppHandle, rx: Receiver<WorkerMsg>) {
 
         loop {
             if worker.state == PlaybackState::Playing {
-                // Drain all queued commands non-blockingly
+                // Drain all queued commands non-blockingly, coalescing consecutive seek commands
                 let mut keep_running = true;
+                let mut pending_seek: Option<String> = None;
                 while let Ok(msg) = rx.try_recv() {
                     match msg {
                         WorkerMsg::Command(json) => {
+                            if json.contains(r#""seek""#) {
+                                pending_seek = Some(json);
+                                continue;
+                            }
+                            if let Some(seek_json) = pending_seek.take() {
+                                if !worker.handle_json(&seek_json) {
+                                    keep_running = false;
+                                    break;
+                                }
+                            }
                             if !worker.handle_json(&json) {
                                 keep_running = false;
                                 break;
                             }
                         }
                         WorkerMsg::StopSession(ack) => {
+                            pending_seek = None;
                             worker.stop_session();
                             let _ = ack.send(());
                         }
@@ -820,6 +827,11 @@ fn run_worker_loop(app: AppHandle, rx: Receiver<WorkerMsg>) {
                 }
                 if !keep_running {
                     break;
+                }
+                if let Some(seek_json) = pending_seek.take() {
+                    if !worker.handle_json(&seek_json) {
+                        break;
+                    }
                 }
                 worker.pump_audio();
             } else {
@@ -990,5 +1002,64 @@ mod tests {
         assert_eq!(val["deviceName"], "USB DAC");
         assert_eq!(val["requestId"], "r1");
         assert_eq!(val["generation"], 3);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_seeks_forward_backward_and_near_eof_cleanly() {
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        // Generate a 2-second 44100 Hz stereo 16-bit PCM WAV file in temp dir
+        let sample_rate: u32 = 44100;
+        let channels: u16 = 2;
+        let num_frames: u32 = sample_rate * 2;
+        let data_bytes = num_frames * (channels as u32) * 2;
+        let mut wav = Vec::with_capacity(44 + data_bytes as usize);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        wav.extend_from_slice(&channels.to_le_bytes());
+        wav.extend_from_slice(&sample_rate.to_le_bytes());
+        wav.extend_from_slice(&(sample_rate * channels as u32 * 2).to_le_bytes());
+        wav.extend_from_slice(&(channels * 2).to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_bytes.to_le_bytes());
+        for i in 0..(num_frames * channels as u32) {
+            let sample = ((i % 100) as i16) * 100;
+            wav.extend_from_slice(&sample.to_le_bytes());
+        }
+
+        let temp_path = std::env::temp_dir().join("symvonia_seek_test.wav");
+        std::fs::write(&temp_path, &wav).expect("write temp wav");
+        let path_str = temp_path.to_string_lossy().to_string();
+
+        let mut decoder = MfDecoder::open(&path_str, None).expect("open wav");
+        let mut buf = vec![0.0f32; 4096];
+        let n1 = decoder.read_samples(&mut buf).expect("initial read");
+        assert!(n1 > 0);
+
+        // Seek forward to 1.0s
+        decoder.seek(1.0).expect("seek to 1.0s");
+        assert!((decoder.position_secs() - 1.0).abs() < 0.05);
+        let n2 = decoder.read_samples(&mut buf).expect("read after forward seek");
+        assert!(n2 > 0);
+
+        // Seek backward to 0.25s
+        decoder.seek(0.25).expect("seek to 0.25s");
+        assert!((decoder.position_secs() - 0.25).abs() < 0.05);
+        let n3 = decoder.read_samples(&mut buf).expect("read after backward seek");
+        assert!(n3 > 0);
+
+        // Seek right to the end (2.0s)
+        decoder.seek(2.0).expect("seek to end");
+        let _ = decoder.read_samples(&mut buf).expect("read near eof");
+
+        let _ = std::fs::remove_file(&temp_path);
     }
 }

@@ -11,11 +11,6 @@ export interface WallpaperPluginStatus {
     sha256?: string | null;
 }
 
-export interface WallpaperDownloadProgress {
-    downloaded: number;
-    total: number;
-}
-
 export interface WallpaperEngineState {
     is_running: boolean;
     state: string;
@@ -30,7 +25,8 @@ export interface WallpaperEngineState {
     last_error?: string | null;
 }
 
-let globalPluginStatus: WallpaperPluginStatus = { installed: false };
+const BUILTIN_PLUGIN_STATUS: WallpaperPluginStatus = { installed: true };
+
 let globalEngineState: WallpaperEngineState = {
     is_running: false,
     state: 'stopped',
@@ -56,9 +52,6 @@ export function isWallpaperEngineActive(): boolean {
 }
 
 export function useWallpaperPlugin() {
-    const [pluginStatus, setPluginStatus] = useState<WallpaperPluginStatus>(globalPluginStatus);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [downloadProgress, setDownloadProgress] = useState<WallpaperDownloadProgress | null>(null);
     const [engineState, setEngineState] = useState<WallpaperEngineState>(() => ({
         ...globalEngineState,
         fit_mode: getStoredValue('wallpaper_fit_mode', 'fill'),
@@ -67,18 +60,11 @@ export function useWallpaperPlugin() {
         fps: getStoredValue('wallpaper_engine_fps', 30),
         intensity: getStoredValue('wallpaper_engine_intensity', 1.0),
     }));
+    const [isBusy, setIsBusy] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const refreshStatus = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        try {
-            const mod = await getTauri();
-            const res = await mod.invoke<WallpaperPluginStatus>('get_wallpaper_plugin_status');
-            globalPluginStatus = res;
-            setPluginStatus(res);
-        } catch {
-            // Ignore error when checking status
-        }
+        // Built-in native Rust engine is always installed
     }, []);
 
     const refreshEngineState = useCallback(async () => {
@@ -95,40 +81,20 @@ export function useWallpaperPlugin() {
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
-            void refreshStatus();
             void refreshEngineState();
         }, 0);
         return () => window.clearTimeout(timer);
-    }, [refreshStatus, refreshEngineState]);
+    }, [refreshEngineState]);
 
     useEffect(() => {
         if (!isBrowserTauri()) return;
 
-        let unlistenProgress: (() => void) | undefined;
         let unlistenEvent: (() => void) | undefined;
         let unlistenStopped: (() => void) | undefined;
         let isCleanedUp = false;
 
         import('@tauri-apps/api/event').then(({ listen }) => {
             if (isCleanedUp) return;
-
-            listen<WallpaperDownloadProgress>('wallpaper-download-progress', (event) => {
-                const payload = event.payload;
-                if (payload.total > 0 && payload.downloaded < payload.total) {
-                    setIsDownloading(true);
-                    setDownloadProgress(payload);
-                } else if (payload.total > 0 && payload.downloaded >= payload.total) {
-                    setIsDownloading(false);
-                    setDownloadProgress(null);
-                    refreshStatus();
-                } else if (payload.total === 0 && payload.downloaded === 0) {
-                    setIsDownloading(false);
-                    setDownloadProgress(null);
-                }
-            }).then((unlisten) => {
-                if (isCleanedUp) unlisten();
-                else unlistenProgress = unlisten;
-            });
 
             listen<string>('wallpaper-engine-event', (event) => {
                 try {
@@ -178,98 +144,15 @@ export function useWallpaperPlugin() {
 
         return () => {
             isCleanedUp = true;
-            unlistenProgress?.();
             unlistenEvent?.();
             unlistenStopped?.();
         };
-    }, [refreshStatus]);
-
-    const downloadPlugin = useCallback(async (customUrl?: string) => {
-        if (!isBrowserTauri()) return;
-        setIsDownloading(true);
-        setErrorMsg(null);
-        try {
-            const mod = await getTauri();
-            const res = await mod.invoke<WallpaperPluginStatus>('download_wallpaper_plugin', {
-                url: customUrl || null,
-            });
-            globalPluginStatus = res;
-            setPluginStatus(res);
-            setIsDownloading(false);
-            setDownloadProgress(null);
-            return res;
-        } catch (err: unknown) {
-            setIsDownloading(false);
-            setDownloadProgress(null);
-            const msg = err instanceof Error ? err.message : String(err);
-            setErrorMsg(msg);
-            throw err;
-        }
-    }, []);
-
-    const cancelDownloadPlugin = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        try {
-            const mod = await getTauri();
-            await mod.invoke('cancel_wallpaper_plugin_download');
-            setIsDownloading(false);
-            setDownloadProgress(null);
-        } catch {
-            // Ignore error
-        }
-    }, []);
-
-    const installFromFile = useCallback(async (filePath: string) => {
-        if (!isBrowserTauri()) return;
-        setErrorMsg(null);
-        try {
-            const mod = await getTauri();
-            const res = await mod.invoke<WallpaperPluginStatus>('install_wallpaper_plugin_from_file', {
-                path: filePath,
-            });
-            globalPluginStatus = res;
-            setPluginStatus(res);
-            return res;
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            setErrorMsg(msg);
-            throw err;
-        }
-    }, []);
-
-    const uninstallPlugin = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        setErrorMsg(null);
-        try {
-            const mod = await getTauri();
-            await mod.invoke('uninstall_wallpaper_plugin');
-            globalPluginStatus = { installed: false };
-            setPluginStatus(globalPluginStatus);
-            globalEngineState = {
-                is_running: false,
-                state: 'stopped',
-                scene: 'cover-reactive',
-                texture_path: null,
-                fit_mode: 'fill',
-                effect: 'none',
-                transition: 'fade',
-                fps: 30,
-                intensity: 1.0,
-                monitor_count: 0,
-                last_error: null,
-            };
-            setEngineState(globalEngineState);
-            setStoredValue('wallpaper_engine_enabled', false);
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            setErrorMsg(msg);
-            throw err;
-        }
     }, []);
 
     const startEngine = useCallback(async (options?: { fps?: number; intensity?: number; texturePath?: string; fitMode?: string; effect?: string; transition?: string }) => {
         if (!isBrowserTauri()) return;
         setErrorMsg(null);
+        setIsBusy(true);
         try {
             const targetFps = options?.fps ?? getStoredValue('wallpaper_engine_fps', 30);
             const targetIntensity = options?.intensity ?? getStoredValue('wallpaper_engine_intensity', 1.0);
@@ -290,23 +173,26 @@ export function useWallpaperPlugin() {
             setEngineState(res);
 
             // Persist settings to config.json
-            setStoredValue('wallpaper_engine_enabled', true);
-            if (options?.fps !== undefined) setStoredValue('wallpaper_engine_fps', options.fps);
-            if (options?.intensity !== undefined) setStoredValue('wallpaper_engine_intensity', options.intensity);
-            if (options?.fitMode !== undefined) setStoredValue('wallpaper_fit_mode', options.fitMode as WallpaperFitMode);
-            if (options?.effect !== undefined) setStoredValue('wallpaper_effect', options.effect as WallpaperEffect);
-            if (options?.transition !== undefined) setStoredValue('wallpaper_transition', options.transition as WallpaperTransition);
+            await setStoredValue('wallpaper_engine_enabled', true);
+            if (options?.fps !== undefined) void setStoredValue('wallpaper_engine_fps', options.fps);
+            if (options?.intensity !== undefined) void setStoredValue('wallpaper_engine_intensity', options.intensity);
+            if (options?.fitMode !== undefined) void setStoredValue('wallpaper_fit_mode', options.fitMode as WallpaperFitMode);
+            if (options?.effect !== undefined) void setStoredValue('wallpaper_effect', options.effect as WallpaperEffect);
+            if (options?.transition !== undefined) void setStoredValue('wallpaper_transition', options.transition as WallpaperTransition);
 
             return res;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             setErrorMsg(msg);
             throw err;
+        } finally {
+            setIsBusy(false);
         }
     }, []);
 
     const stopEngine = useCallback(async () => {
         if (!isBrowserTauri()) return;
+        setIsBusy(true);
         try {
             const mod = await getTauri();
             await mod.invoke('stop_wallpaper_engine');
@@ -315,9 +201,11 @@ export function useWallpaperPlugin() {
                 globalEngineState = next;
                 return next;
             });
-            setStoredValue('wallpaper_engine_enabled', false);
+            await setStoredValue('wallpaper_engine_enabled', false);
         } catch {
             // Ignore error
+        } finally {
+            setIsBusy(false);
         }
     }, []);
 
@@ -355,9 +243,13 @@ export function useWallpaperPlugin() {
         if (!isBrowserTauri()) return;
         try {
             const mod = await getTauri();
-            await mod.invoke('set_wallpaper_engine_fit_mode', { mode });
+            if (globalEngineState.is_running) {
+                await mod.invoke('set_wallpaper_engine_fit_mode', { mode });
+            } else {
+                await mod.invoke('set_wallpaper_fit_mode', { mode });
+            }
             setEngineState((prev) => ({ ...prev, fit_mode: mode }));
-            setStoredValue('wallpaper_fit_mode', mode as WallpaperFitMode);
+            await setStoredValue('wallpaper_fit_mode', mode as WallpaperFitMode);
         } catch {
             // Ignore
         }
@@ -369,7 +261,7 @@ export function useWallpaperPlugin() {
             const mod = await getTauri();
             await mod.invoke('set_wallpaper_engine_effect', { effect });
             setEngineState((prev) => ({ ...prev, effect }));
-            setStoredValue('wallpaper_effect', effect as WallpaperEffect);
+            await setStoredValue('wallpaper_effect', effect as WallpaperEffect);
         } catch {
             // Ignore
         }
@@ -381,7 +273,7 @@ export function useWallpaperPlugin() {
             const mod = await getTauri();
             await mod.invoke('set_wallpaper_engine_transition', { transition });
             setEngineState((prev) => ({ ...prev, transition }));
-            setStoredValue('wallpaper_transition', transition as WallpaperTransition);
+            await setStoredValue('wallpaper_transition', transition as WallpaperTransition);
         } catch {
             // Ignore
         }
@@ -393,7 +285,7 @@ export function useWallpaperPlugin() {
             const mod = await getTauri();
             await mod.invoke('set_wallpaper_engine_fps', { fps });
             setEngineState((prev) => ({ ...prev, fps }));
-            setStoredValue('wallpaper_engine_fps', fps);
+            await setStoredValue('wallpaper_engine_fps', fps);
         } catch {
             // Ignore
         }
@@ -405,7 +297,7 @@ export function useWallpaperPlugin() {
             const mod = await getTauri();
             await mod.invoke('set_wallpaper_engine_intensity', { intensity });
             setEngineState((prev) => ({ ...prev, intensity }));
-            setStoredValue('wallpaper_engine_intensity', intensity, { debounceMs: 200 });
+            void setStoredValue('wallpaper_engine_intensity', intensity, { debounceMs: 200 });
         } catch {
             // Ignore
         }
@@ -413,7 +305,7 @@ export function useWallpaperPlugin() {
 
     // Auto-start live wallpaper engine if enabled in saved config.json
     useEffect(() => {
-        if (pluginStatus.installed && !globalAutoStarted && !globalEngineState.is_running) {
+        if (!globalAutoStarted && !globalEngineState.is_running) {
             const shouldAutoStart = getStoredValue('wallpaper_engine_enabled', false);
             if (shouldAutoStart) {
                 globalAutoStarted = true;
@@ -432,21 +324,16 @@ export function useWallpaperPlugin() {
                 return () => window.clearTimeout(timer);
             }
         }
-    }, [pluginStatus.installed, startEngine]);
+    }, [startEngine]);
 
     return {
-        pluginStatus,
-        isDownloading,
-        downloadProgress,
+        pluginStatus: BUILTIN_PLUGIN_STATUS,
         engineState,
         isEngineRunning: engineState.is_running,
+        isBusy,
         errorMsg,
         refreshStatus,
         refreshEngineState,
-        downloadPlugin,
-        cancelDownloadPlugin,
-        installFromFile,
-        uninstallPlugin,
         startEngine,
         stopEngine,
         pauseEngine,
