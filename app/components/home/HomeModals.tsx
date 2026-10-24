@@ -63,13 +63,13 @@ interface HomeModalsProps {
     layoutMode?: 'default' | 'spotify';
     setLayoutMode?: (v: 'default' | 'spotify') => void;
     outputDevice: string | null;
-    setOutputDevice: (v: string | null) => void;
+    setOutputDevice: (v: string | null) => Promise<void> | void;
     outputMode: OutputMode;
-    setOutputMode: (v: OutputMode) => void;
+    setOutputMode: (v: OutputMode) => Promise<void> | void;
     autoFallbackHtmlAudio?: boolean;
     setAutoFallbackHtmlAudio?: (v: boolean) => void;
     audioRuntime: PlaybackRuntimeInfo;
-    onResetPlayer: () => void;
+    onResetPlayer: (options?: {preserveWallpaper?: boolean}) => Promise<void> | void;
     onRetryNativeAudio: () => void;
     folderSort: string;
     setFolderSort: (v: string) => void;

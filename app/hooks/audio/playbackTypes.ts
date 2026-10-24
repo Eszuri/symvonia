@@ -43,6 +43,7 @@ interface PlaybackRuntimeError {
 
 export interface PlaybackRuntimeInfo {
     status: PlaybackRuntimeStatus;
+    busy?: boolean;
     requestedMode: OutputMode;
     effectiveMode: OutputMode | null;
     path: string | null;

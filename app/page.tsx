@@ -29,7 +29,6 @@ import {getTauri, isBrowserTauri} from "./lib/homeState";
 import {resetAppConfig} from "./lib/storage";
 import {useModalRouter} from "./hooks/useModalRouter";
 import {useGlobalContextMenu} from "./hooks/useGlobalContextMenu";
-import {useBitPerfectEngine} from "./hooks/useBitPerfectEngine";
 import MediaOverlayPage from "./media-overlay/page";
 
 export default function Home() {
@@ -249,10 +248,6 @@ function HomeContent() {
         prevVolumeLimitExceeded.current = exceeded;
     }, [settings.volumeLimitExceeded, settings.volumeLimit, showStatusNotif]);
 
-    const { status: bpStatus } = useBitPerfectEngine();
-    const isPluginInstalled = bpStatus?.installed === true;
-    const isEqualizerInstalled = isPluginInstalled;
-    const isTagEditorInstalled = isPluginInstalled;
     const player = useAudioPlayer({
         lang,
         musicFolder: settings.musicFolder,
@@ -284,7 +279,6 @@ function HomeContent() {
         setOutputDevice: settings.setOutputDeviceState,
         autoFallbackHtmlAudio: settings.autoFallbackHtmlAudio,
         onAutoFallback: () => showStatusNotif('auto-fallback'),
-        nativeEngineInstalled: settings.outputMode === 'html_audio' ? true : bpStatus?.installed ?? null,
     });
 
     useKeyboardShortcuts({
@@ -510,8 +504,8 @@ function HomeContent() {
                 accentColor={settings.accentColor}
                 onOpenStreaming={openStreaming}
                 onOpenSettings={openSettings}
-                onOpenEqualizer={isEqualizerInstalled ? openEqualizer : undefined}
-                onOpenEditMetadata={isTagEditorInstalled ? openMetadataEdit : undefined}
+                onOpenEqualizer={openEqualizer}
+                onOpenEditMetadata={openMetadataEdit}
                 onToggleLeftSidebar={() => setShowLeftSidebar((v) => !v)}
                 onToggleRightSidebar={() => setShowRightSidebar((v) => !v)}
                 onGlobalContextMenu={showGlobalContextMenu}
@@ -563,7 +557,7 @@ function HomeContent() {
                 toggleSystemMute={player.toggleSystemMute}
                 onGlobalContextMenu={showGlobalContextMenu}
                 onCoverSaved={() => showStatusNotif('cover-saved')}
-                onOpenEditMetadata={isTagEditorInstalled ? openMetadataEdit : undefined}
+                onOpenEditMetadata={openMetadataEdit}
                 runtime={player.runtime}
                 fileSort={settings.fileSort}
                 setFileSort={settings.setFileSortState}
@@ -682,7 +676,7 @@ function HomeContent() {
                 equalizer={player.equalizer}
                 accentColor={settings.accentColor}
                 lang={lang}
-                disabled={(player.runtime.effectiveMode ?? settings.outputMode) !== 'html_audio'}
+                disabled={Boolean(player.runtime.busy) || (player.runtime.effectiveMode ?? settings.outputMode) !== 'html_audio'}
             />
 
             <MetadataEditModal

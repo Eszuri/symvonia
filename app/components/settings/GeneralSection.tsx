@@ -59,6 +59,7 @@ export default function GeneralSection({
     updateTotal,
     outputMode,
     nativeOutputActive = false,
+    audioBusy = false,
     hideWallpaperGroup = false,
 }: {
     lang: Lang;
@@ -110,6 +111,7 @@ export default function GeneralSection({
     updateTotal: number;
     outputMode?: OutputMode;
     nativeOutputActive?: boolean;
+    audioBusy?: boolean;
     hideWallpaperGroup?: boolean;
 }) {
     const accent = getAccent(accentColor);
@@ -253,7 +255,7 @@ export default function GeneralSection({
                 >
                     <SelectStub
                         ariaLabel={t(lang, 'general.volumeMode.title')}
-                        disabled={nativeOutputActive}
+                        disabled={nativeOutputActive || audioBusy}
                         options={[['app', t(lang, 'general.volumeMode.app')], ['system', t(lang, 'general.volumeMode.system')]]}
                         value={volumeMode}
                         onChange={setVolumeMode}
@@ -310,7 +312,7 @@ export default function GeneralSection({
                 >
                     <SelectStub
                         ariaLabel={t(lang, 'general.fadeAudio.title')}
-                        disabled={outputMode !== 'html_audio'}
+                        disabled={outputMode !== 'html_audio' || audioBusy}
                         options={[
                             ['true', t(lang, 'general.pauseIfMuted.on')],
                             ['false', t(lang, 'general.pauseIfMuted.off')],
@@ -327,6 +329,7 @@ export default function GeneralSection({
                         description={t(lang, 'general.fadeDuration.desc')}
                     >
                         <SelectStub
+                            disabled={audioBusy}
                             options={[
                                 ['200', '200 ms (0.2s)'],
                                 ['300', '300 ms (0.3s)'],

@@ -11,13 +11,10 @@ use std::path::Path;
 use std::time::SystemTime;
 use tauri::{AppHandle, Manager, State};
 
+use crate::audio::engine;
 use crate::library_cache::{self, CachedEntry, DirectorySnapshot, LibraryCacheState};
-use crate::sidecar;
 
-/// Enumerate active output devices in the host process. This is a fallback
-/// for installations where the optional C# engine's device-response event is
-/// delayed or unavailable. Device ids are friendly names and are accepted by
-/// the C# engine as a fallback identifier.
+/// Enumerate active output devices in the host process via Windows MMDevice API.
 #[tauri::command]
 pub async fn get_audio_devices() -> Result<Vec<crate::audio::output::AudioDeviceInfo>, String> {
     tauri::async_runtime::spawn_blocking(crate::audio::output::get_audio_hosts_and_devices)
@@ -40,11 +37,14 @@ pub struct WasapiSupportResult {
 
 #[cfg(windows)]
 pub fn probe_wasapi_device(device_id: Option<String>) -> Result<WasapiSupportResult, String> {
+    use crate::audio::wasapi::{
+        build_waveformat_extensible, build_waveformat_plain, exclusive_format_candidates,
+    };
     use windows::core::HSTRING;
     use windows::Win32::Media::Audio::{
         eMultimedia, eRender, IAudioClient, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
-        AUDCLNT_SHAREMODE_EXCLUSIVE, AUDCLNT_SHAREMODE_SHARED, DEVICE_STATE_ACTIVE,
-        WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
+        AUDCLNT_SHAREMODE_EXCLUSIVE, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+        DEVICE_STATE_ACTIVE, WAVEFORMATEX,
     };
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_INPROC_SERVER,
@@ -160,168 +160,149 @@ pub fn probe_wasapi_device(device_id: Option<String>) -> Result<WasapiSupportRes
         let mix_format = &*mix_format_ptr;
         let default_sample_rate = mix_format.nSamplesPerSec;
 
-        let supported_shared = client
-            .IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, mix_format_ptr, None)
-            .is_ok();
+        let mut closest_match_ptr: *mut WAVEFORMATEX = std::ptr::null_mut();
+        let hr_shared = client.IsFormatSupported(
+            AUDCLNT_SHAREMODE_SHARED,
+            mix_format_ptr,
+            Some(&mut closest_match_ptr),
+        );
+        if !closest_match_ptr.is_null() {
+            CoTaskMemFree(Some(closest_match_ptr as *const _));
+        }
+        let supported_shared = hr_shared.0 == 0 || default_sample_rate > 0;
 
         // 2. Pengujian Mode Exclusive
         let mut supported_exclusive = false;
         let mut exclusive_not_allowed = false;
         let mut in_use = false;
         let mut supported_rates: Vec<u32> = Vec::new();
+        let mut hardware_init_verified = false;
 
         // Helper untuk menguji apakah IAudioClient benar-benar bisa diinisialisasi
-        // dalam mode Exclusive pada perangkat ini (bukan sekadar lolos format parsing)
-        let test_exclusive_init = |dev: &IMMDevice, wfx: *const WAVEFORMATEX| -> bool {
+        // dalam mode Exclusive pada perangkat ini (dilakukan sekali pada format pertama yang lolos).
+        // Mengembalikan: (verified_ok, not_allowed, device_in_use)
+        let verify_exclusive_init = |dev: &IMMDevice, wfx: *const WAVEFORMATEX| -> (bool, bool, bool) {
             if let Ok(tc) = dev.Activate::<IAudioClient>(CLSCTX_INPROC_SERVER, None) {
                 let mut def_p: i64 = 0;
                 let mut min_p: i64 = 0;
                 let _ = tc.GetDevicePeriod(Some(&mut def_p), Some(&mut min_p));
-                let period = if min_p > 0 { min_p } else { 500_000 };
+                let period = if def_p > 0 { def_p } else { 500_000 };
                 let init_res = tc.Initialize(
                     AUDCLNT_SHAREMODE_EXCLUSIVE,
-                    0,
+                    AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
                     period,
                     period,
                     wfx,
                     None,
                 );
                 match init_res {
-                    Ok(()) => true,
+                    Ok(()) => (true, false, false),
                     Err(e) => {
                         let code = e.code().0;
-                        code == -2004287463 || code == -2004287478
+                        if code == -2004287474 {
+                            // 0x8889000E AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED
+                            (false, true, false)
+                        } else if code == -2004287478 {
+                            // 0x8889000A AUDCLNT_E_DEVICE_IN_USE
+                            (true, false, true)
+                        } else if code == -2004287463 {
+                            // 0x88890019 AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED
+                            (true, false, false)
+                        } else {
+                            // Retry once without EVENTCALLBACK in case driver prefers polling for probe
+                            if let Ok(tc2) = dev.Activate::<IAudioClient>(CLSCTX_INPROC_SERVER, None) {
+                                match tc2.Initialize(
+                                    AUDCLNT_SHAREMODE_EXCLUSIVE,
+                                    0,
+                                    period,
+                                    period,
+                                    wfx,
+                                    None,
+                                ) {
+                                    Ok(()) => (true, false, false),
+                                    Err(e2) => {
+                                        let c2 = e2.code().0;
+                                        if c2 == -2004287474 {
+                                            (false, true, false)
+                                        } else if c2 == -2004287478 {
+                                            (true, false, true)
+                                        } else if c2 == -2004287463 {
+                                            (true, false, false)
+                                        } else {
+                                            (false, false, false)
+                                        }
+                                    }
+                                }
+                            } else {
+                                (false, false, false)
+                            }
+                        }
                     }
                 }
             } else {
-                false
+                (false, false, false)
             }
         };
 
-        // Cek format native perangkat di mode exclusive
-        let hr = client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, mix_format_ptr, None);
-        if hr.is_ok() && test_exclusive_init(&device, mix_format_ptr) {
-            supported_exclusive = true;
-            supported_rates.push(default_sample_rate);
-        } else {
-            let code = hr.0;
-            if code == -2004287474 { // 0x8889000E AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED
-                exclusive_not_allowed = true;
-            } else if code == -2004287478 { // 0x8889000A AUDCLNT_E_DEVICE_IN_USE
-                in_use = true;
-                supported_exclusive = true;
-            }
+        // Cek seluruh kandidat sample rate menggunakan seluruh kandidat bit-depth WASAPI Exclusive
+        // (Float32, Pcm24In32, Pcm24Packed, Pcm32, Pcm16 — baik Extensible maupun Plain)
+        let mut candidate_rates = vec![44100u32, 48000, 88200, 96000, 176400, 192000];
+        if !candidate_rates.contains(&default_sample_rate) {
+            candidate_rates.push(default_sample_rate);
         }
 
-        // Jika exclusive mode tidak dilarang, cek format standar PCM (16-bit, 24-bit, 32-bit float)
-        if !exclusive_not_allowed {
-            let candidate_rates = [44100u32, 48000u32, 88200u32, 96000u32, 176400u32, 192000u32];
-            const KSDATAFORMAT_SUBTYPE_PCM: windows::core::GUID =
-                windows::core::GUID::from_u128(0x00000001_0000_0010_8000_00aa00389b71);
-            const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: windows::core::GUID =
-                windows::core::GUID::from_u128(0x00000003_0000_0010_8000_00aa00389b71);
-
-            for &rate in &candidate_rates {
-                if supported_rates.contains(&rate) {
-                    continue;
-                }
-
-                let mut rate_supported = false;
-
-                // Test 1: 16-bit PCM Stereo
-                let wfx16 = WAVEFORMATEX {
-                    wFormatTag: 1, // WAVE_FORMAT_PCM
-                    nChannels: 2,
-                    nSamplesPerSec: rate,
-                    nAvgBytesPerSec: rate * 4,
-                    nBlockAlign: 4,
-                    wBitsPerSample: 16,
-                    cbSize: 0,
+        'rate_loop: for &rate in &candidate_rates {
+            for &(fmt, use_extensible) in exclusive_format_candidates() {
+                let wfx_ext = build_waveformat_extensible(rate, 2, fmt);
+                let wfx_plain = build_waveformat_plain(rate, 2, fmt);
+                let wfx_ptr: *const WAVEFORMATEX = if use_extensible {
+                    &wfx_ext.Format
+                } else {
+                    &wfx_plain
                 };
-                if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, &wfx16, None).is_ok()
-                    && test_exclusive_init(&device, &wfx16)
-                {
-                    rate_supported = true;
-                }
 
-                // Test 2: 24-bit PCM Stereo (Extensible)
-                if !rate_supported {
-                    let wfx24_ext = WAVEFORMATEXTENSIBLE {
-                        Format: WAVEFORMATEX {
-                            wFormatTag: 0xFFFE, // WAVE_FORMAT_EXTENSIBLE
-                            nChannels: 2,
-                            nSamplesPerSec: rate,
-                            nAvgBytesPerSec: rate * 6,
-                            nBlockAlign: 6,
-                            wBitsPerSample: 24,
-                            cbSize: 22,
-                        },
-                        Samples: windows::Win32::Media::Audio::WAVEFORMATEXTENSIBLE_0 {
-                            wValidBitsPerSample: 24,
-                        },
-                        dwChannelMask: 0x3, // SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT
-                        SubFormat: KSDATAFORMAT_SUBTYPE_PCM,
-                    };
-                    let ptr24 = &wfx24_ext as *const _ as *const WAVEFORMATEX;
-                    if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, ptr24, None).is_ok()
-                        && test_exclusive_init(&device, ptr24)
-                    {
-                        rate_supported = true;
-                    }
-                }
-
-                // Test 3: 32-bit Float Stereo
-                if !rate_supported {
-                    let wfx32 = WAVEFORMATEX {
-                        wFormatTag: 3, // WAVE_FORMAT_IEEE_FLOAT
-                        nChannels: 2,
-                        nSamplesPerSec: rate,
-                        nAvgBytesPerSec: rate * 8,
-                        nBlockAlign: 8,
-                        wBitsPerSample: 32,
-                        cbSize: 0,
-                    };
-                    if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, &wfx32, None).is_ok()
-                        && test_exclusive_init(&device, &wfx32)
-                    {
-                        rate_supported = true;
-                    }
-                }
-
-                // Test 4: 32-bit Float Stereo (Extensible)
-                if !rate_supported {
-                    let wfx32_ext = WAVEFORMATEXTENSIBLE {
-                        Format: WAVEFORMATEX {
-                            wFormatTag: 0xFFFE,
-                            nChannels: 2,
-                            nSamplesPerSec: rate,
-                            nAvgBytesPerSec: rate * 8,
-                            nBlockAlign: 8,
-                            wBitsPerSample: 32,
-                            cbSize: 22,
-                        },
-                        Samples: windows::Win32::Media::Audio::WAVEFORMATEXTENSIBLE_0 {
-                            wValidBitsPerSample: 32,
-                        },
-                        dwChannelMask: 0x3,
-                        SubFormat: KSDATAFORMAT_SUBTYPE_IEEE_FLOAT,
-                    };
-                    let ptr32 = &wfx32_ext as *const _ as *const WAVEFORMATEX;
-                    if client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, ptr32, None).is_ok()
-                        && test_exclusive_init(&device, ptr32)
-                    {
-                        rate_supported = true;
-                    }
-                }
-
-                if rate_supported {
+                let hr = client.IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, wfx_ptr, None);
+                if hr.0 == -2004287474 {
+                    // 0x8889000E AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED
+                    exclusive_not_allowed = true;
+                    break 'rate_loop;
+                } else if hr.0 == -2004287478 {
+                    // 0x8889000A AUDCLNT_E_DEVICE_IN_USE
+                    in_use = true;
                     supported_exclusive = true;
+                    hardware_init_verified = true;
                     supported_rates.push(rate);
+                    break;
+                } else if hr.0 == 0 {
+                    // S_OK: format didukung oleh driver
+                    if !hardware_init_verified {
+                        let (ok, not_allowed, busy) = verify_exclusive_init(&device, wfx_ptr);
+                        if not_allowed {
+                            exclusive_not_allowed = true;
+                            supported_rates.clear();
+                            supported_exclusive = false;
+                            break 'rate_loop;
+                        }
+                        if busy {
+                            in_use = true;
+                        }
+                        if ok {
+                            hardware_init_verified = true;
+                            supported_exclusive = true;
+                            supported_rates.push(rate);
+                            break;
+                        }
+                    } else {
+                        supported_exclusive = true;
+                        supported_rates.push(rate);
+                        break;
+                    }
                 }
             }
         }
 
         supported_rates.sort_unstable();
+        supported_rates.dedup();
 
         CoTaskMemFree(Some(mix_format_ptr as *const _));
 
@@ -931,6 +912,134 @@ pub fn get_metadata(file_path: String) -> Result<SongMetadata, String> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn write_tags_native(
+    file_path: &str,
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    genre: Option<String>,
+    year: Option<u32>,
+    track_number: Option<u32>,
+    total_tracks: Option<u32>,
+    disc_number: Option<u32>,
+    total_discs: Option<u32>,
+    comment: Option<String>,
+    cover_b64: Option<String>,
+    cover_mime: Option<String>,
+) -> Result<(), String> {
+    use lofty::config::WriteOptions;
+    use lofty::picture::{MimeType, Picture, PictureType};
+    use lofty::tag::Tag;
+
+    let path = Path::new(file_path);
+    if file_path.trim().is_empty() || !path.exists() {
+        return Err("File not found".to_string());
+    }
+
+    let mut tagged_file = match read_from_path(path) {
+        Ok(t) => t,
+        Err(_) => {
+            let probe = lofty::probe::Probe::open(path)
+                .map_err(|e| format!("Failed to open audio file for tagging: {}", e))?
+                .options(
+                    lofty::config::ParseOptions::new()
+                        .parsing_mode(lofty::config::ParsingMode::Relaxed),
+                );
+            probe
+                .read()
+                .map_err(|e| format!("Failed to read audio tags: {}", e))?
+        }
+    };
+
+    let tag_type = tagged_file.primary_tag_type();
+    if tagged_file.primary_tag().is_none() && tagged_file.first_tag().is_none() {
+        tagged_file.insert_tag(Tag::new(tag_type));
+    }
+
+    let has_primary = tagged_file.primary_tag().is_some();
+    let tag = if has_primary {
+        tagged_file.primary_tag_mut()
+    } else {
+        tagged_file.first_tag_mut()
+    }
+    .ok_or_else(|| "Unsupported tag format for this audio file".to_string())?;
+
+    match title.filter(|s| !s.trim().is_empty()) {
+        Some(v) => tag.set_title(v),
+        None => tag.remove_title(),
+    }
+    match artist.filter(|s| !s.trim().is_empty()) {
+        Some(v) => tag.set_artist(v),
+        None => tag.remove_artist(),
+    }
+    match album.filter(|s| !s.trim().is_empty()) {
+        Some(v) => tag.set_album(v),
+        None => tag.remove_album(),
+    }
+    match genre.filter(|s| !s.trim().is_empty()) {
+        Some(v) => tag.set_genre(v),
+        None => tag.remove_genre(),
+    }
+    match comment.filter(|s| !s.trim().is_empty()) {
+        Some(v) => tag.set_comment(v),
+        None => tag.remove_comment(),
+    }
+    match year {
+        Some(v) => tag.set_year(v),
+        None => tag.remove_year(),
+    }
+    match track_number {
+        Some(v) => tag.set_track(v),
+        None => tag.remove_track(),
+    }
+    match total_tracks {
+        Some(v) => tag.set_track_total(v),
+        None => tag.remove_track_total(),
+    }
+    match disc_number {
+        Some(v) => tag.set_disk(v),
+        None => tag.remove_disk(),
+    }
+    match total_discs {
+        Some(v) => tag.set_disk_total(v),
+        None => tag.remove_disk_total(),
+    }
+
+    match cover_b64.filter(|s| !s.trim().is_empty()) {
+        Some(b64) => {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64.trim())
+                .map_err(|e| format!("Invalid cover image base64: {}", e))?;
+            let mime_str = cover_mime.as_deref().unwrap_or("image/jpeg");
+            let mime = MimeType::from_str(mime_str);
+            let pic = Picture::new_unchecked(
+                PictureType::CoverFront,
+                Some(mime),
+                Some("Front Cover".to_string()),
+                bytes,
+            );
+            tag.remove_picture_type(PictureType::CoverFront);
+            while !tag.pictures().is_empty() {
+                tag.remove_picture(0);
+            }
+            tag.push_picture(pic);
+        }
+        None => {
+            tag.remove_picture_type(PictureType::CoverFront);
+            while !tag.pictures().is_empty() {
+                tag.remove_picture(0);
+            }
+        }
+    }
+
+    tagged_file
+        .save_to_path(path, WriteOptions::default())
+        .map_err(|e| format!("Failed to save metadata tags: {}", e))?;
+
+    Ok(())
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn save_metadata(
@@ -949,8 +1058,7 @@ pub fn save_metadata(
     cover_b64: Option<String>,
     cover_mime: Option<String>,
 ) -> Result<(), String> {
-    crate::unified_engine_manager::write_tags_via_plugin(
-        &app,
+    write_tags_native(
         &file_path,
         title,
         artist,
@@ -964,7 +1072,17 @@ pub fn save_metadata(
         comment,
         cover_b64,
         cover_mime,
-    )
+    )?;
+
+    if let Some(parent) = Path::new(&file_path).parent() {
+        let cache = app.state::<LibraryCacheState>();
+        let _ = library_cache::invalidate_library_directory(
+            cache,
+            parent.to_string_lossy().to_string(),
+        );
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -999,19 +1117,21 @@ pub async fn save_cover_image(cover_b64: String, mime: String) -> Result<(), Str
 
 #[tauri::command]
 pub async fn send_audio_command(app: AppHandle, json: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || sidecar::send_command(&app, &json))
+    tauri::async_runtime::spawn_blocking(move || engine::send_command(&app, &json))
         .await
         .map_err(|e| format!("Audio engine command task failed: {}", e))?
 }
 
 #[tauri::command]
-pub fn stop_audio_engine() -> Result<(), String> {
-    sidecar::stop_engine()
+pub async fn stop_audio_engine() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(engine::stop_engine)
+        .await
+        .map_err(|e| format!("Audio engine stop task failed: {}", e))?
 }
 
 #[tauri::command]
 pub fn is_audio_engine_running() -> bool {
-    sidecar::is_running()
+    engine::is_running()
 }
 
 #[cfg(test)]
@@ -1118,5 +1238,85 @@ mod tests {
         );
         assert_eq!(result[1].display_name, "A Song");
         assert_eq!(snapshot.entries[0].title.as_deref(), Some("A Song"));
+    }
+
+    #[test]
+    fn write_tags_native_roundtrip_on_wav_file() {
+        let temp_path = std::env::temp_dir().join(format!(
+            "symvonia_tag_test_{}.wav",
+            std::process::id()
+        ));
+
+        // Build a minimal valid 44-byte + 4-byte PCM WAV file (44.1kHz, 16-bit mono, 2 samples)
+        let mut wav: Vec<u8> = Vec::with_capacity(48);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&40u32.to_le_bytes()); // file size - 8
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+        wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        wav.extend_from_slice(&1u16.to_le_bytes()); // 1 channel
+        wav.extend_from_slice(&44100u32.to_le_bytes()); // sample rate
+        wav.extend_from_slice(&88200u32.to_le_bytes()); // byte rate
+        wav.extend_from_slice(&2u16.to_le_bytes()); // block align
+        wav.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&4u32.to_le_bytes()); // 4 bytes of audio data
+        wav.extend_from_slice(&[0u8, 0, 0, 0]);
+        std::fs::write(&temp_path, &wav).expect("write temp wav");
+
+        let path_str = temp_path.to_string_lossy().to_string();
+        let fake_png_b64 = base64::engine::general_purpose::STANDARD.encode([137u8, 80, 78, 71]);
+
+        write_tags_native(
+            &path_str,
+            Some("Native Title".to_string()),
+            Some("Native Artist".to_string()),
+            Some("Native Album".to_string()),
+            Some("Electronic".to_string()),
+            Some(2026),
+            Some(3),
+            Some(12),
+            Some(1),
+            Some(2),
+            Some("Tagged in Rust".to_string()),
+            Some(fake_png_b64.clone()),
+            Some("image/png".to_string()),
+        )
+        .expect("write_tags_native should succeed");
+
+        let meta = get_metadata(path_str.clone()).expect("get_metadata should succeed");
+        assert_eq!(meta.title.as_deref(), Some("Native Title"));
+        assert_eq!(meta.artist.as_deref(), Some("Native Artist"));
+        assert_eq!(meta.album.as_deref(), Some("Native Album"));
+        assert_eq!(meta.genre.as_deref(), Some("Electronic"));
+        assert_eq!(meta.year, Some(2026));
+        assert_eq!(meta.track_number, Some(3));
+        assert_eq!(meta.total_tracks, Some(12));
+        assert_eq!(meta.disc_number, Some(1));
+        assert_eq!(meta.total_discs, Some(2));
+        assert_eq!(meta.comment.as_deref(), Some("Tagged in Rust"));
+        assert_eq!(meta.cover_b64.as_deref(), Some(fake_png_b64.as_str()));
+
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[test]
+    fn probe_wasapi_and_list_devices_smoke_test() {
+        let devices = crate::audio::output::get_audio_hosts_and_devices();
+        for d in &devices {
+            println!("Device: id={} name={} default={}", d.id, d.name, d.is_default);
+            if let Ok(res) = probe_wasapi_device(Some(d.id.clone())) {
+                println!(
+                    "  -> Probe: shared={} exclusive={} rates={:?} not_allowed={} in_use={} msg={}",
+                    res.supported_shared,
+                    res.supported_exclusive,
+                    res.supported_sample_rates,
+                    res.exclusive_not_allowed,
+                    res.in_use,
+                    res.message
+                );
+            }
+        }
     }
 }

@@ -1,30 +1,12 @@
 # Symvonia Plugins Directory
 
-Direktori ini berisi kode sumber untuk plugin eksternal berbasis **.NET 8 (C#)** yang digunakan oleh **Symvonia Player** sebagai *headless sidecar background engines* via komunikasi **Stdio JSON IPC**.
+Direktori ini berisi kode sumber untuk plugin eksternal yang digunakan oleh **Symvonia Player** sebagai *headless sidecar background engines* via komunikasi **Stdio JSON IPC**.
 
 ---
 
 ## 🧩 Daftar Plugin
 
-### 1. `src-audio-engine` — WASAPI Exclusive Bit-Perfect Audio Engine
-Engine audio performa tinggi untuk pemutaran audio lossless bit-perfect secara eksklusif.
-
-- **Teknologi**: .NET 8.0, NAudio (WASAPI Exclusive Mode)
-- **Nama Executable**: `symvonia-audio-engine.exe`
-- **Fitur**:
-  - Pemutaran audio 100% bit-perfect Bypass System Mixer Windows (WASAPI Exclusive)
-  - Pengaturan *output device* (Soundcard / DAC)
-  - Kontrol *playback*: Play, Pause, Resume, Stop, Seek, Volume
-  - Pelaporan *real-time progress* & posisi audio via Stdio JSON IPC
-
-#### Perintah Build:
-```bash
-dotnet publish plugin/src-engine/SymvoniaEngine.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o plugin/src-engine/publish
-```
-
----
-
-### 2. `src-ai-lyrics` — Local AI Lyrics Generator Engine
+### 1. `src-ai-lyrics` — Local AI Lyrics Generator Engine
 Engine transkripsi lirik otomatis offline menggunakan model kecerdasan buatan (AI) Speech-to-Text lokal.
 
 - **Teknologi**: .NET 8.0, `Whisper.net` (v1.9.1), NAudio
@@ -51,7 +33,7 @@ dotnet publish plugin/src-ai-lyrics/AiLyricsPlugin.csproj -c Release -r win-x64 
 ```
 *Atau gunakan skrip otomatis:* `.\build-plugin-lyrics.bat`
 
-### 3. `src-wallpaper-engine` — Standalone Direct3D11/HLSL Wallpaper Renderer
+### 2. `src-wallpaper-engine` — Standalone Direct3D11/HLSL Wallpaper Renderer
 Engine wallpaper desktop mandiri untuk Windows yang tidak bergantung pada Tauri atau audio engine.
 
 - **Teknologi**: C++20, Win32, Direct3D 11, HLSL Shader Model 5
@@ -104,7 +86,6 @@ Setiap plugin berjalan sebagai *standalone headless console application* yang me
 ## 📂 Lokasi Instalasi Runtime pada Symvonia Player
 
 Saat diunduh atau diimpor oleh Symvonia Player, plugin dipasang pada direktori `AppData` pengguna:
-- **Audio Engine**: `%APPDATA%\com.symvonia.player\plugins\engine\`
 - **AI Lyrics Plugin**: `%APPDATA%\com.symvonia.player\plugins\ai-lyrics\`
 - **Wallpaper Engine**: `%APPDATA%\com.symvonia.player\plugins\wallpaper-engine\`
 

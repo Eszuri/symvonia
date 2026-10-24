@@ -9,7 +9,6 @@
         "lint": "eslint",
         "typecheck": "tsc --noEmit",
         "tauri": "tauri",
-        "build:plugin-audio": "build-plugin-audio.bat",
         "build:plugin-lyrics": "build-plugin-lyrics.bat",
         "build:plugins": "build-all-plugins.bat"
     },

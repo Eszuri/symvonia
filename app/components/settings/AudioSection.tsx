@@ -28,23 +28,25 @@ export default function AudioSection({
 }: {
     lang: Lang;
     outputDevice: string | null;
-    setOutputDevice: (v: string | null) => void;
+    setOutputDevice: (v: string | null) => Promise<void> | void;
     outputMode: OutputMode;
-    setOutputMode: (v: OutputMode) => void;
+    setOutputMode: (v: OutputMode) => Promise<void> | void;
     audioRuntime: PlaybackRuntimeInfo;
-    onResetPlayer: () => void;
+    onResetPlayer: (options?: {preserveWallpaper?: boolean}) => Promise<void> | void;
     onRetryNativeAudio?: () => void;
     accentColor: string;
     autoFallbackHtmlAudio?: boolean;
     setAutoFallbackHtmlAudio?: (v: boolean) => void;
 }) {
     const accent = getAccent(accentColor);
-    const {status, getDevices, testDevice} = useBitPerfectEngine();
+    const {getDevices, testDevice} = useBitPerfectEngine();
     const [devices, setDevices] = useState<EngineDevice[]>([]);
     const [devicesLoading, setDevicesLoading] = useState(false);
     const [devicesError, setDevicesError] = useState<string | null>(null);
     const [pendingMode, setPendingMode] = useState<OutputMode | null>(null);
     const [confirmModeOpen, setConfirmModeOpen] = useState(false);
+    const [switchingMode, setSwitchingMode] = useState(false);
+    const [applyingDevice, setApplyingDevice] = useState(false);
     const [prevPropDevice, setPrevPropDevice] = useState(outputDevice);
     const [selectedDevice, setSelectedDevice] = useState<string | null>(outputDevice);
     const [appliedFeedback, setAppliedFeedback] = useState(false);
@@ -66,35 +68,51 @@ export default function AudioSection({
         setSelectedDevice(outputDevice);
     }
 
-    const installed = status?.installed === true;
     const nativeMode = isNativeMode(outputMode);
     const activeDeviceKnown = Boolean(audioRuntime.deviceName);
+    const isAudioBusy = Boolean(
+        switchingMode ||
+        applyingDevice ||
+        audioRuntime.busy ||
+        audioRuntime.status === 'stopping' ||
+        audioRuntime.status === 'starting' ||
+        audioRuntime.status === 'loading',
+    );
 
     const refreshDevices = useCallback(async () => {
-        if (!installed) return;
         setDevicesLoading(true);
         setDevicesError(null);
         try {
             const list = await getDevices();
             setDevices(list);
-            if (list.length === 0) setDevicesError(t(lang, 'audio.device.empty'));
+            if (list.length === 0) {
+                setDevicesError(t(lang, 'audio.device.empty'));
+            } else {
+                // Normalize legacy friendly-name device config to WASAPI Endpoint ID if needed
+                setSelectedDevice((prev) => {
+                    if (!prev) return prev;
+                    if (list.some((d) => d.id === prev)) return prev;
+                    const byName = list.find((d) => d.name.toLowerCase() === prev.toLowerCase());
+                    return byName ? byName.id : prev;
+                });
+            }
         } catch (error) {
             setDevices([]);
             setDevicesError((error as Error).message || t(lang, 'audio.device.error'));
         } finally {
             setDevicesLoading(false);
         }
-    }, [getDevices, installed, lang]);
+    }, [getDevices, lang]);
 
     useEffect(() => {
-        if (!installed) return;
         const timer = window.setTimeout(() => {
             void refreshDevices();
         }, 0);
         return () => window.clearTimeout(timer);
-    }, [installed, refreshDevices]);
+    }, [refreshDevices]);
 
     const selectMode = (value: string) => {
+        if (isAudioBusy) return;
         if (value !== 'html_audio' && value !== 'wasapi_shared' && value !== 'wasapi_exclusive') return;
         const nextMode = value as OutputMode;
         if (nextMode === outputMode) return;
@@ -110,10 +128,38 @@ export default function AudioSection({
                 : 'audio.outputMode.wasapiExclusive')
         : '';
 
-    const handleApplyDevice = () => {
-        setOutputDevice(selectedDevice);
-        setAppliedFeedback(true);
-        window.setTimeout(() => setAppliedFeedback(false), 1800);
+    const handleConfirmModeChange = async () => {
+        if (!pendingMode || switchingMode) return;
+        const nextMode = pendingMode;
+        setConfirmModeOpen(false);
+        setSwitchingMode(true);
+        try {
+            // Clear the current player before switching engines so
+            // no HTML/native stream survives the mode change, and wait
+            // until the async stop + config save + device refresh finish.
+            await Promise.all([
+                Promise.resolve(onResetPlayer({preserveWallpaper: true})),
+                Promise.resolve(setOutputMode(nextMode)),
+            ]);
+            if (isNativeMode(nextMode)) {
+                await refreshDevices();
+            }
+        } finally {
+            setSwitchingMode(false);
+            setPendingMode(null);
+        }
+    };
+
+    const handleApplyDevice = async () => {
+        if (isAudioBusy || !nativeMode) return;
+        setApplyingDevice(true);
+        try {
+            await Promise.resolve(setOutputDevice(selectedDevice));
+            setAppliedFeedback(true);
+            window.setTimeout(() => setAppliedFeedback(false), 1800);
+        } finally {
+            setApplyingDevice(false);
+        }
     };
 
     const handleTestDevice = async () => {
@@ -166,38 +212,38 @@ export default function AudioSection({
                 confirmLabel={t(lang, 'audio.outputMode.changeConfirm')}
                 cancelLabel={t(lang, 'confirm.defaultCancel')}
                 accentColor={accentColor}
+                loading={switchingMode}
                 onConfirm={() => {
-                    if (pendingMode) {
-                        // Clear the current player before switching engines so
-                        // no HTML/native stream survives the mode change.
-                        onResetPlayer();
-                        setOutputMode(pendingMode);
-                    }
-                    setPendingMode(null);
-                    setConfirmModeOpen(false);
+                    void handleConfirmModeChange();
                 }}
                 onCancel={() => {
+                    if (switchingMode) return;
                     setPendingMode(null);
                     setConfirmModeOpen(false);
                 }}
             />
 
             <SettingGroup title={t(lang, 'audio.group.mode')}>
-                <SettingRow title={t(lang, 'audio.outputMode.title')} description={t(lang, 'audio.outputMode.desc')}>
+                <SettingRow
+                    title={t(lang, 'audio.outputMode.title')}
+                    description={t(lang, 'audio.outputMode.desc')}
+                    className={isAudioBusy ? 'opacity-60 transition-opacity' : 'transition-opacity'}
+                >
                     <SelectStub
                         ariaLabel={t(lang, 'audio.outputMode.title')}
                         options={[
                             ['html_audio', t(lang, 'audio.outputMode.htmlAudio')],
-                            ['wasapi_shared', t(lang, 'audio.outputMode.wasapiShared'), !installed],
-                            ['wasapi_exclusive', t(lang, 'audio.outputMode.wasapiExclusive'), !installed],
+                            ['wasapi_shared', t(lang, 'audio.outputMode.wasapiShared')],
+                            ['wasapi_exclusive', t(lang, 'audio.outputMode.wasapiExclusive')],
                         ]}
                         value={outputMode}
                         onChange={selectMode}
+                        disabled={isAudioBusy || testingDevice}
                         accent={accent}
                         accentColor={accentColor}
                     />
                 </SettingRow>
-                <div className="px-4 py-3.5 border-b border-zinc-800/40 last:border-0">
+                <div className={`px-4 py-3.5 border-b border-zinc-800/40 last:border-0 transition-opacity ${(!nativeMode || isAudioBusy) ? 'opacity-60' : ''}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2.5">
                         <div className="text-sm font-medium text-zinc-100">{t(lang, 'audio.outputDevice.title')}</div>
                         {testingDevice && (
@@ -252,6 +298,7 @@ export default function AudioSection({
                             options={deviceOptions}
                             value={selectedDevice || ''}
                             onChange={(val) => {
+                                if (isAudioBusy) return;
                                 setSelectedDevice(val || null);
                                 if (testTimerRef.current !== null) {
                                     window.clearTimeout(testTimerRef.current);
@@ -260,7 +307,7 @@ export default function AudioSection({
                                 setTestResult(null);
                                 setTestError(null);
                             }}
-                            disabled={!installed || !nativeMode}
+                            disabled={!nativeMode || isAudioBusy || devicesLoading || testingDevice}
                             accent={accent}
                             accentColor={accentColor}
                             fullWidth
@@ -268,8 +315,8 @@ export default function AudioSection({
                         <div className="flex items-center gap-2.5">
                             <button
                                 type="button"
-                                onClick={handleApplyDevice}
-                                disabled={!installed || !nativeMode || devicesLoading}
+                                onClick={() => void handleApplyDevice()}
+                                disabled={!nativeMode || isAudioBusy || devicesLoading || testingDevice}
                                 className={`px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all duration-150 shadow-sm cursor-pointer active:scale-[0.98] ${
                                     appliedFeedback
                                         ? 'bg-emerald-600 hover:bg-emerald-500'
@@ -281,7 +328,7 @@ export default function AudioSection({
                             <button
                                 type="button"
                                 onClick={() => void refreshDevices()}
-                                disabled={!installed || devicesLoading}
+                                disabled={isAudioBusy || devicesLoading || testingDevice}
                                 className="px-4 py-2 rounded-lg border border-zinc-700/60 bg-zinc-800/80 text-xs font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer active:scale-[0.98]"
                             >
                                 {devicesLoading ? t(lang, 'audio.device.refreshing') : t(lang, 'audio.device.refresh')}
@@ -289,7 +336,7 @@ export default function AudioSection({
                             <button
                                 type="button"
                                 onClick={() => void handleTestDevice()}
-                                disabled={testingDevice}
+                                disabled={isAudioBusy || devicesLoading || testingDevice}
                                 className="px-4 py-2 rounded-lg border border-zinc-700/60 bg-zinc-800/80 text-xs font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer active:scale-[0.98] flex items-center gap-1.5"
                             >
                                 {testingDevice ? (
@@ -310,11 +357,12 @@ export default function AudioSection({
                 <SettingRow
                     title={t(lang, 'audio.autoFallback.title')}
                     description={t(lang, 'audio.autoFallback.desc')}
+                    className={isAudioBusy ? 'opacity-60 transition-opacity' : 'transition-opacity'}
                 >
                     <ToggleStub
                         checked={autoFallbackHtmlAudio}
                         onChange={(val) => setAutoFallbackHtmlAudio?.(val)}
-                        disabled={!installed}
+                        disabled={isAudioBusy || testingDevice}
                         accent={accent}
                     />
                 </SettingRow>

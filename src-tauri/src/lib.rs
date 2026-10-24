@@ -9,10 +9,8 @@ pub mod library_cache;
 pub mod media_access;
 mod taskbar;
 pub mod migration;
-pub mod sidecar;
 pub mod sidecar_lyrics;
 pub mod sidecar_wallpaper;
-pub mod unified_engine_manager;
 pub mod wallpaper_plugin_manager;
 
 pub use commands::*;
@@ -286,11 +284,6 @@ pub fn run() {
             open_webview_stream,
             control_stream_playback,
             get_latest_stream_metadata,
-            get_bit_perfect_plugin_status,
-            download_bit_perfect_plugin,
-            cancel_bit_perfect_plugin_download,
-            install_bit_perfect_plugin_from_file,
-            uninstall_bit_perfect_plugin,
             send_audio_command,
             get_audio_devices,
             test_wasapi_device,
@@ -327,17 +320,6 @@ pub fn run() {
             clean_ai_models_data,
             clean_all_app_data,
             get_app_environment,
-            get_equalizer_plugin_status,
-            download_equalizer_plugin,
-            cancel_equalizer_plugin_download,
-            install_equalizer_plugin_from_file,
-            uninstall_equalizer_plugin,
-            get_dsp_curve,
-            get_tag_editor_plugin_status,
-            download_tag_editor_plugin,
-            cancel_tag_editor_plugin_download,
-            install_tag_editor_plugin_from_file,
-            uninstall_tag_editor_plugin,
             get_wallpaper_plugin_status,
             download_wallpaper_plugin,
             cancel_wallpaper_plugin_download,
@@ -521,11 +503,10 @@ pub fn run() {
     app.run(|_handle, event| {
         #[cfg(windows)]
         if let tauri::RunEvent::Exit = event {
-            // Kill all sidecar engines and downloads so they never outlive the host app.
-            let _ = sidecar::stop_engine();
+            // Stop the native audio engine and kill remaining sidecar engines/downloads.
+            let _ = audio::engine::stop_engine();
             sidecar_lyrics::stop_engine();
             sidecar_wallpaper::stop_engine();
-            unified_engine_manager::cancel_download();
             ai_lyrics_plugin_manager::cancel_download();
             wallpaper_plugin_manager::cancel_download();
             if commands::wallpaper::RESET_ON_CLOSE.load(Ordering::SeqCst) {

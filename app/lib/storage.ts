@@ -263,7 +263,7 @@ export function setStoredValue<K extends keyof SymvoniaConfig>(
     key: K,
     value: SymvoniaConfig[K],
     options?: { debounceMs?: number }
-): void {
+): Promise<void> {
     const config = getInitialConfig();
     config[key] = value;
     inMemoryConfig = config;
@@ -291,13 +291,14 @@ export function setStoredValue<K extends keyof SymvoniaConfig>(
     }
     const debounceMs = options?.debounceMs ?? 0;
     if (debounceMs > 0) {
-        saveTimers[key as string] = setTimeout(() => {
-            performSave();
-            delete saveTimers[key as string];
-        }, debounceMs);
-    } else {
-        performSave();
+        return new Promise<void>((resolve) => {
+            saveTimers[key as string] = setTimeout(() => {
+                delete saveTimers[key as string];
+                void performSave().finally(resolve);
+            }, debounceMs);
+        });
     }
+    return performSave();
 }
 
 /**

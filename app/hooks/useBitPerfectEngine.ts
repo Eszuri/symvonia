@@ -3,13 +3,6 @@ import {getTauri, isBrowserTauri} from "../lib/homeState";
 
 export type NativeOutputMode = "shared" | "exclusive";
 
-export interface BitPerfectPluginStatus {
-    installed: boolean;
-    path: string | null;
-    size_bytes: number | null;
-    sha256: string | null;
-}
-
 export interface EngineStateEvent {
     state: "playing" | "paused" | "stopped" | "ended";
     path: string | null;
@@ -103,23 +96,10 @@ function parseProgressEvent(value: Record<string, unknown>): EngineProgressEvent
 }
 
 /**
- * Manages the optional C# Bit-Perfect audio engine plugin:
- * install status, download/uninstall, process lifecycle, and the
- * `audio-event` JSON stream coming from its stdout.
+ * Manages the built-in native Rust WASAPI audio engine (Shared & Exclusive modes)
+ * and subscribes to the `audio-event` stream emitted by the backend.
  */
 export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
-    const [status, setStatus] = useState<BitPerfectPluginStatus | null>(null);
-
-    const setStatusGlobal = useCallback((newStatus: BitPerfectPluginStatus | null) => {
-        setStatus(newStatus);
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('bitperfect-status-changed', { detail: newStatus }));
-            window.dispatchEvent(new CustomEvent('equalizer-status-changed', { detail: newStatus }));
-            window.dispatchEvent(new CustomEvent('tageditor-status-changed', { detail: newStatus }));
-        }
-    }, []);
-    const [downloading, setDownloading] = useState(false);
-    const [downloadProgress, setDownloadProgress] = useState<{downloaded: number; total: number} | null>(null);
     const [engineRunning, setEngineRunning] = useState(false);
     const [engineState, setEngineState] = useState<EngineStateEvent | null>(null);
 
@@ -128,34 +108,6 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
         handlersRef.current = handlers;
     });
 
-    const refreshStatus = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        try {
-            const mod = await getTauri();
-            const s = await mod.invoke<BitPerfectPluginStatus>("get_bit_perfect_plugin_status");
-            setStatusGlobal(s);
-        } catch {
-            // plugin commands unavailable (older backend) — stay silent
-        }
-    }, [setStatusGlobal]);
-
-    useEffect(() => {
-        const handler = (e: Event) => {
-            const customEvent = e as CustomEvent<BitPerfectPluginStatus | null>;
-            setStatus(customEvent.detail);
-        };
-        window.addEventListener('bitperfect-status-changed', handler);
-        return () => window.removeEventListener('bitperfect-status-changed', handler);
-    }, []);
-
-    useEffect(() => {
-        const timer = window.setTimeout(() => {
-            void refreshStatus();
-        }, 0);
-        return () => window.clearTimeout(timer);
-    }, [refreshStatus]);
-
-    // Subscribe to engine stdout events + download progress.
     useEffect(() => {
         if (!isBrowserTauri()) return;
         let cancelled = false;
@@ -201,17 +153,6 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
                         break;
                 }
             }).then((fn) => (cancelled ? fn() : unlistens.push(fn)));
-
-            listen("audio-engine-exit", () => {
-                if (cancelled) return;
-                setEngineRunning(false);
-                setEngineState(null);
-            }).then((fn) => (cancelled ? fn() : unlistens.push(fn)));
-
-            listen<{downloaded: number; total: number}>("bit-perfect-download-progress", (event) => {
-                if (cancelled) return;
-                setDownloadProgress(event.payload);
-            }).then((fn) => (cancelled ? fn() : unlistens.push(fn)));
         }).catch(() => {
             if (!cancelled) {
                 setEngineRunning(false);
@@ -232,56 +173,9 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
         setEngineRunning(true);
     }, []);
 
-    // A Tauri/WebView reload does not restart the sidecar process. Ask the
-    // existing engine for its current state so a new frontend can resync the
-    // play/pause controls instead of treating an already-playing stream as
-    // paused.
     const getState = useCallback(async () => {
         await sendCommand({command: "get_state"});
     }, [sendCommand]);
-
-    const download = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        setDownloading(true);
-        setDownloadProgress(null);
-        try {
-            const mod = await getTauri();
-            const s = await mod.invoke<BitPerfectPluginStatus>("download_bit_perfect_plugin", {});
-            setStatusGlobal(s);
-        } finally {
-            setDownloading(false);
-            setDownloadProgress(null);
-        }
-    }, [setStatusGlobal]);
-
-    const cancelDownload = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        try {
-            const mod = await getTauri();
-            await mod.invoke("cancel_bit_perfect_plugin_download");
-        } catch (e) {
-            console.error("Error cancelling download:", e);
-        } finally {
-            setDownloading(false);
-            setDownloadProgress(null);
-        }
-    }, []);
-
-    const installFromFile = useCallback(async (path: string) => {
-        if (!isBrowserTauri()) return;
-        const mod = await getTauri();
-        const s = await mod.invoke<BitPerfectPluginStatus>("install_bit_perfect_plugin_from_file", {path});
-        setStatusGlobal(s);
-    }, [setStatusGlobal]);
-
-    const uninstall = useCallback(async () => {
-        if (!isBrowserTauri()) return;
-        const mod = await getTauri();
-        await mod.invoke("uninstall_bit_perfect_plugin");
-        setStatusGlobal({installed: false, path: null, size_bytes: null, sha256: null});
-        setEngineRunning(false);
-        setEngineState(null);
-    }, [setStatusGlobal]);
 
     const stopEngine = useCallback(async () => {
         if (!isBrowserTauri()) return;
@@ -294,27 +188,9 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
         if (!isBrowserTauri()) return [];
         const mod = await getTauri();
 
-        // Prefer enumeration in the host process. It keeps the settings UI
-        // usable even when the optional engine has not emitted its IPC event
-        // yet (or an older installed engine does not support get_devices).
         try {
-            // Do not let a blocked OS audio endpoint hold the settings picker
-            // indefinitely. The sidecar request below is the compatibility
-            // fallback for older installs and slow/unavailable CPAL hosts.
-            const nativeDevices = await new Promise<EngineDevice[] | null>((resolve, reject) => {
-                const timer = window.setTimeout(() => resolve(null), 750);
-                mod.invoke<EngineDevice[]>("get_audio_devices").then(
-                    (devices) => {
-                        window.clearTimeout(timer);
-                        resolve(devices);
-                    },
-                    (error) => {
-                        window.clearTimeout(timer);
-                        reject(error);
-                    },
-                );
-            });
-            if (Array.isArray(nativeDevices) && nativeDevices.length > 0) {
+            const nativeDevices = await mod.invoke<EngineDevice[]>("get_audio_devices");
+            if (Array.isArray(nativeDevices)) {
                 return nativeDevices
                     .filter((device) => device && typeof device.id === "string" && typeof device.name === "string")
                     .map((device) => ({
@@ -324,49 +200,10 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
                     }));
             }
         } catch {
-            // Fall back to the optional engine's request/response path below.
+            // Ignore device enumeration failure
         }
 
-        const requestId = crypto.randomUUID();
-        return new Promise<EngineDevice[]>((resolve) => {
-            let done = false;
-            let unlisten: (() => void) | null = null;
-            const timer = window.setTimeout(() => finish([]), 1500);
-            const finish = (devices: EngineDevice[]) => {
-                if (done) return;
-                done = true;
-                window.clearTimeout(timer);
-                unlisten?.();
-                resolve(devices);
-            };
-
-            import("@tauri-apps/api/event")
-                .then(({listen}) => listen<string>("audio-event", (event) => {
-                    try {
-                        const parsed = JSON.parse(event.payload) as Record<string, unknown>;
-                        if (
-                            parsed.event === "devices" &&
-                            (parsed.requestId === requestId || parsed.requestId === undefined) &&
-                            Array.isArray(parsed.devices)
-                        ) {
-                            finish(parsed.devices as EngineDevice[]);
-                        }
-                    } catch {
-                        // Ignore malformed device events.
-                    }
-                }))
-                .then((stopListening) => {
-                    unlisten = stopListening;
-                    if (done) {
-                        stopListening();
-                        return;
-                    }
-                    return mod.invoke("send_audio_command", {
-                        json: JSON.stringify({command: "get_devices", requestId}),
-                    }).then(() => setEngineRunning(true));
-                })
-                .catch(() => finish([]));
-        });
+        return [];
     }, []);
 
     const testDevice = useCallback(async (deviceId?: string | null): Promise<WasapiSupportResult> => {
@@ -380,18 +217,10 @@ export function useBitPerfectEngine(handlers: EngineEventHandlers = {}) {
     }, []);
 
     return {
-        status,
-        downloading,
-        downloadProgress,
         engineRunning,
         engineState,
-        refreshStatus,
         sendCommand,
         getState,
-        download,
-        cancelDownload,
-        installFromFile,
-        uninstall,
         stopEngine,
         getDevices,
         testDevice,

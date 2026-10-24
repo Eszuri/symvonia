@@ -397,15 +397,6 @@ pub fn load_config(app: &AppHandle) -> SymvoniaConfig {
         Ok(content) => match serde_json::from_str::<SymvoniaConfig>(&content) {
             Ok(mut config) => {
                 config.sanitize();
-                if config.output_mode == "wasapi_shared" || config.output_mode == "wasapi_exclusive"
-                {
-                    if let Ok(status) = crate::unified_engine_manager::get_status(app) {
-                        if !status.installed {
-                            config.output_mode = "html_audio".to_string();
-                            config.output_device = None;
-                        }
-                    }
-                }
 
                 // Synchronize global wallpaper states from loaded config
                 if let Ok(mut guard) = crate::commands::wallpaper::WALLPAPER_FIT_MODE.lock() {
@@ -464,15 +455,6 @@ pub fn save_config(app: &AppHandle, config: &SymvoniaConfig) -> Result<(), Strin
     let mut sanitized = config.clone();
     sanitized.sanitize();
 
-    if sanitized.output_mode == "wasapi_shared" || sanitized.output_mode == "wasapi_exclusive" {
-        if let Ok(status) = crate::unified_engine_manager::get_status(app) {
-            if !status.installed {
-                sanitized.output_mode = "html_audio".to_string();
-                sanitized.output_device = None;
-            }
-        }
-    }
-
     let json_bytes = serde_json::to_vec_pretty(&sanitized)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
@@ -521,23 +503,15 @@ fn calculate_dir_size(path: &Path) -> u64 {
 // Tauri IPC Command Handlers
 // =========================================================================
 
-#[tauri::command]
-pub fn get_app_config(app: AppHandle) -> Result<SymvoniaConfig, String> {
-    Ok(load_config(&app))
-}
+static CONFIG_IO_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-#[tauri::command]
-pub fn save_app_config(app: AppHandle, config: SymvoniaConfig) -> Result<(), String> {
-    save_config(&app, &config)
-}
-
-#[tauri::command]
-pub fn set_app_config_key(
-    app: AppHandle,
+fn set_app_config_key_sync(
+    app: &AppHandle,
     key: String,
     value: serde_json::Value,
 ) -> Result<(), String> {
-    let mut config = load_config(&app);
+    let _guard = CONFIG_IO_LOCK.lock().map_err(|e| e.to_string())?;
+    let mut config = load_config(app);
     let mut config_val = serde_json::to_value(&config)
         .map_err(|e| format!("Failed to serialize current config: {}", e))?;
 
@@ -548,23 +522,59 @@ pub fn set_app_config_key(
         }
     }
 
-    save_config(&app, &config)
+    save_config(app, &config)
 }
 
 #[tauri::command]
-pub fn save_config_value(
+pub async fn get_app_config(app: AppHandle) -> Result<SymvoniaConfig, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = CONFIG_IO_LOCK.lock().map_err(|e| e.to_string())?;
+        Ok(load_config(&app))
+    })
+    .await
+    .map_err(|e| format!("Config read task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn save_app_config(app: AppHandle, config: SymvoniaConfig) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = CONFIG_IO_LOCK.lock().map_err(|e| e.to_string())?;
+        save_config(&app, &config)
+    })
+    .await
+    .map_err(|e| format!("Config write task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn set_app_config_key(
     app: AppHandle,
     key: String,
     value: serde_json::Value,
 ) -> Result<(), String> {
-    set_app_config_key(app, key, value)
+    tauri::async_runtime::spawn_blocking(move || set_app_config_key_sync(&app, key, value))
+        .await
+        .map_err(|e| format!("Config update task failed: {}", e))?
 }
 
 #[tauri::command]
-pub fn reset_app_config(app: AppHandle) -> Result<SymvoniaConfig, String> {
-    let default_config = SymvoniaConfig::default();
-    save_config(&app, &default_config)?;
-    Ok(default_config)
+pub async fn save_config_value(
+    app: AppHandle,
+    key: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    set_app_config_key(app, key, value).await
+}
+
+#[tauri::command]
+pub async fn reset_app_config(app: AppHandle) -> Result<SymvoniaConfig, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = CONFIG_IO_LOCK.lock().map_err(|e| e.to_string())?;
+        let default_config = SymvoniaConfig::default();
+        save_config(&app, &default_config)?;
+        Ok(default_config)
+    })
+    .await
+    .map_err(|e| format!("Config reset task failed: {}", e))?
 }
 
 pub fn export_config_to_path(config: &SymvoniaConfig, path: &Path) -> Result<(), String> {

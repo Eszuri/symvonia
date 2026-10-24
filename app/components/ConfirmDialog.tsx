@@ -17,6 +17,7 @@ interface ConfirmDialogProps {
     onConfirm: () => void;
     onCancel: () => void;
     accentColor: string;
+    loading?: boolean;
 }
 
 export default function ConfirmDialog({
@@ -29,6 +30,7 @@ export default function ConfirmDialog({
     onConfirm,
     onCancel,
     accentColor,
+    loading = false,
 }: ConfirmDialogProps) {
     const resolvedConfirm = confirmLabel ?? t(lang, 'confirm.defaultConfirm');
     const resolvedCancel = cancelLabel ?? t(lang, 'confirm.defaultCancel');
@@ -38,11 +40,11 @@ export default function ConfirmDialog({
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Escape' && !loading) onCancel();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [open, onCancel]);
+    }, [open, onCancel, loading]);
 
     if (typeof document === 'undefined') return null;
 
@@ -56,7 +58,7 @@ export default function ConfirmDialog({
                         mouseDownOnBackdropRef.current = e.target === e.currentTarget;
                     }}
                     onClick={(e) => {
-                        if (mouseDownOnBackdropRef.current && e.target === e.currentTarget) {
+                        if (!loading && mouseDownOnBackdropRef.current && e.target === e.currentTarget) {
                             onCancel();
                         }
                         mouseDownOnBackdropRef.current = false;
@@ -73,14 +75,18 @@ export default function ConfirmDialog({
                         <p className="text-sm text-zinc-400 leading-relaxed">{message}</p>
                         <div className="flex justify-end gap-2 pt-2">
                             <button
+                                type="button"
+                                disabled={loading}
                                 onClick={onCancel}
-                                className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 cursor-pointer"
+                                className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/70 border border-zinc-700/50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 {resolvedCancel}
                             </button>
                             <button
+                                type="button"
+                                disabled={loading}
                                 onClick={onConfirm}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${accent.bg600} ${accent.hoverBg400} border ${accent.border500_30} cursor-pointer`}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${accent.bg600} ${accent.hoverBg400} border ${accent.border500_30} cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
                             >
                                 {resolvedConfirm}
                             </button>

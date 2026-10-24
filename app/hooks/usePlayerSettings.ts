@@ -512,18 +512,19 @@ export function usePlayerSettings() {
         }
     };
 
-    const setOutputDeviceState = useCallback((name: string | null) => {
+    const setOutputDeviceState = useCallback(async (name: string | null) => {
         setOutputDeviceStateInternal(name);
-        setStoredValue('output_device', name);
+        await setStoredValue('output_device', name);
     }, []);
 
-    const setOutputMode = useCallback((mode: OutputMode) => {
+    const setOutputMode = useCallback(async (mode: OutputMode) => {
         setOutputModeStateInternal(mode);
-        setStoredValue('output_mode', mode);
+        const tasks: Promise<void>[] = [setStoredValue('output_mode', mode)];
         if (mode === 'wasapi_exclusive' && volumeModeRef.current === 'system') {
             setVolumeModeStateInternal('app');
-            setStoredValue('volume_mode', 'app');
+            tasks.push(setStoredValue('volume_mode', 'app'));
         }
+        await Promise.all(tasks);
     }, []);
 
     const setAutoFallbackHtmlAudio = useCallback((v: boolean) => {
