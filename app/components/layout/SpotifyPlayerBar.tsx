@@ -73,13 +73,38 @@ export default function SpotifyPlayerBar({
     const [isLiked, setIsLiked] = useState(false);
     const [isHoveringSeek, setIsHoveringSeek] = useState(false);
     const [isHoveringVolume, setIsHoveringVolume] = useState(false);
+    const [isDraggingSeek, setIsDraggingSeek] = useState(false);
+    const [dragSeekTime, setDragSeekTime] = useState(0);
 
     const title = metadata?.title || selectedSong?.name.replace(/\.[^/.]+$/, "") || t(lang, "player.noTrackSelected");
     const artist = metadata?.artist || (selectedSong ? t(lang, "player.unknownArtist") : "Symvonia");
 
-    const safeTime = duration > 0 ? Math.min(duration, Math.max(0, currentTime)) : Math.max(0, currentTime);
+    const displayTime = isDraggingSeek ? dragSeekTime : currentTime;
+    const safeTime = duration > 0 ? Math.min(duration, Math.max(0, displayTime)) : Math.max(0, displayTime);
     const seekPct = duration > 0 ? Math.min(100, Math.max(0, (safeTime / duration) * 100)) : 0;
     const volPct = Math.round(volume * 100);
+
+    const handleSeekPointerDown = () => {
+        setIsDraggingSeek(true);
+        setDragSeekTime(safeTime);
+    };
+
+    const handleSeekChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const val = parseFloat(e.target.value);
+        if (isDraggingSeek) {
+            setDragSeekTime(val);
+        } else {
+            handleSeek(e);
+        }
+    };
+
+    const handleSeekCommit = (e: React.PointerEvent<HTMLInputElement> | React.MouseEvent<HTMLInputElement>) => {
+        if (isDraggingSeek) {
+            setIsDraggingSeek(false);
+            const val = parseFloat((e.currentTarget as HTMLInputElement).value);
+            handleSeek({ target: { value: String(val) } } as ChangeEvent<HTMLInputElement>);
+        }
+    };
 
     return (
         <footer className="w-full h-22 bg-black border-t border-zinc-850/80 px-4 flex items-center justify-between z-40 select-none shrink-0 gap-4">
@@ -262,7 +287,10 @@ export default function SpotifyPlayerBar({
                             max={duration || 0}
                             step="0.1"
                             value={safeTime}
-                            onChange={handleSeek}
+                            onPointerDown={handleSeekPointerDown}
+                            onPointerUp={handleSeekCommit}
+                            onPointerCancel={handleSeekCommit}
+                            onChange={handleSeekChange}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                         />
                         {isHoveringSeek && (

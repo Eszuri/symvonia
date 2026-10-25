@@ -590,9 +590,15 @@ impl AudioWorker {
         };
 
         if let Some(ref mut s) = self.session {
-            // Do NOT stop or reset WasapiOutput during seek; keep the hardware DMA clock
-            // and event loop uninterrupted and simply reposition the decoder with a smooth
-            // 15ms fade-in ramp.
+            let was_playing = self.state == PlaybackState::Playing;
+
+            // Stop output clock and reset WASAPI hardware buffer before seeking to prevent
+            // buffer underrun, DMA clock pointer desync, and clicks/distortions from leftover audio.
+            if was_playing {
+                s.output.stop();
+            }
+            let _ = s.output.reset();
+
             if let Err(e) = s.decoder.seek(pos) {
                 let mode = s.mode.clone();
                 let path = s.path.clone();
@@ -610,6 +616,22 @@ impl AudioWorker {
                 return;
             }
             self.draining_eof = false;
+
+            if was_playing {
+                // Pre-fill initial buffer at the new seek position (with decoder fade-in ramp)
+                // before starting the hardware DMA clock.
+                let init_frames = s.output.buffer_frames;
+                let vol = self.volume;
+                let _ = s.output.write_frames(init_frames, vol, &mut self.scratch, |buf| {
+                    s.decoder.read_samples(buf)
+                });
+                let _ = s.output.start();
+            } else if self.state == PlaybackState::Paused {
+                // In paused state, pre-fill with silence so WASAPI endpoint stays active.
+                let init_frames = s.output.buffer_frames;
+                let _ = s.output.write_silence(init_frames);
+                let _ = s.output.start();
+            }
         }
 
         if self.pausing {

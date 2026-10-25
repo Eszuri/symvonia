@@ -227,15 +227,28 @@ impl MfDecoder {
                     {
                         self.sample_format = DecodedSampleFormat::Float32;
                         true
+                    } else if Self::configure_output_subtype(
+                        &new_reader,
+                        first_audio,
+                        &MFAudioFormat_PCM,
+                        self.target_rate,
+                        self.target_channels,
+                    )
+                    .is_ok()
+                    {
+                        let bits = new_reader
+                            .GetCurrentMediaType(first_audio)
+                            .ok()
+                            .and_then(|mt| mt.GetUINT32(&MF_MT_AUDIO_BITS_PER_SAMPLE).ok())
+                            .unwrap_or(16);
+                        self.sample_format = match bits {
+                            24 => DecodedSampleFormat::Pcm24,
+                            32 => DecodedSampleFormat::Pcm32,
+                            _ => DecodedSampleFormat::Pcm16,
+                        };
+                        true
                     } else {
-                        Self::configure_output_subtype(
-                            &new_reader,
-                            first_audio,
-                            &MFAudioFormat_PCM,
-                            self.target_rate,
-                            self.target_channels,
-                        )
-                        .is_ok()
+                        false
                     };
                     if fmt_ok {
                         self.reader = new_reader;
@@ -252,12 +265,10 @@ impl MfDecoder {
                 }
             }
 
-            if hns > 0 {
-                let var = PROPVARIANT::from(hns);
-                self.reader
-                    .SetCurrentPosition(&GUID::zeroed(), &var)
-                    .map_err(|e| format!("Failed to seek audio stream: {}", e))?;
-            }
+            let var = PROPVARIANT::from(hns);
+            self.reader
+                .SetCurrentPosition(&GUID::zeroed(), &var)
+                .map_err(|e| format!("Failed to seek audio stream: {}", e))?;
         }
 
         self.residual.clear();

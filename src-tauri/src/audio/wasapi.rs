@@ -358,6 +358,18 @@ impl WasapiOutput {
         }
     }
 
+    pub fn reset(&mut self) -> Result<(), String> {
+        self.stop();
+        unsafe {
+            let res = self.client.Reset();
+            let _ = ResetEvent(self.event_handle);
+            if let Err(e) = res {
+                return Err(format!("IAudioClient::Reset failed: {}", e));
+            }
+        }
+        Ok(())
+    }
+
     /// Waits up to `timeout_ms` for the WASAPI buffer-ready event.
     /// Returns `true` if the event was signaled.
     pub fn wait_for_buffer(&self, timeout_ms: u32) -> bool {

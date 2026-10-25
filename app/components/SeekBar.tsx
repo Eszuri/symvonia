@@ -2,8 +2,8 @@
 
 import React, { memo, useState } from 'react';
 import { getAccent } from '../lib/colors';
-import {t, type Lang} from '../lib/translations';
-import {useHoverDescription} from '../hooks/useHoverDescription';
+import { t, type Lang } from '../lib/translations';
+import { useHoverDescription } from '../hooks/useHoverDescription';
 
 interface SeekBarProps {
     lang: Lang;
@@ -21,10 +21,36 @@ function formatTime(seconds: number): string {
 
 function SeekBar({ lang, currentTime, duration, handleSeek, accentColor }: SeekBarProps) {
     const accent = getAccent(accentColor);
-    const safeDisplayTime = duration > 0 ? Math.min(duration, Math.max(0, currentTime)) : 0;
-    const progressPct = duration > 0 ? Math.min(100, Math.max(0, (safeDisplayTime / duration) * 100)) : 0;
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragTime, setDragTime] = useState(0);
     const [hovering, setHovering] = useState(false);
     const hoverProps = useHoverDescription(t(lang, 'status.seekBar'));
+
+    const displayTime = isDragging ? dragTime : currentTime;
+    const safeDisplayTime = duration > 0 ? Math.min(duration, Math.max(0, displayTime)) : 0;
+    const progressPct = duration > 0 ? Math.min(100, Math.max(0, (safeDisplayTime / duration) * 100)) : 0;
+
+    const handlePointerDown = () => {
+        setIsDragging(true);
+        setDragTime(safeDisplayTime);
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = parseFloat(e.target.value);
+        if (isDragging) {
+            setDragTime(val);
+        } else {
+            handleSeek(e);
+        }
+    };
+
+    const handleCommit = (e: React.PointerEvent<HTMLInputElement> | React.MouseEvent<HTMLInputElement>) => {
+        if (isDragging) {
+            setIsDragging(false);
+            const val = parseFloat((e.currentTarget as HTMLInputElement).value);
+            handleSeek({ target: { value: String(val) } } as React.ChangeEvent<HTMLInputElement>);
+        }
+    };
 
     return (
         <div className="w-full group" {...hoverProps}>
@@ -48,7 +74,10 @@ function SeekBar({ lang, currentTime, duration, handleSeek, accentColor }: SeekB
                     max={duration || 0}
                     step="0.1"
                     value={safeDisplayTime}
-                    onChange={handleSeek}
+                    onPointerDown={handlePointerDown}
+                    onPointerUp={handleCommit}
+                    onPointerCancel={handleCommit}
+                    onChange={handleChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
                 <div
