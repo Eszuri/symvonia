@@ -128,7 +128,8 @@ export function SelectStub({
             targetLeft = Math.max(12, rect.right - targetWidth);
         }
 
-        const totalHeight = options.length * 36 + 12;
+        const menuMaxHeight = 280;
+        const totalHeight = Math.min(options.length * 36 + 12, menuMaxHeight);
         const spaceBelow = window.innerHeight - rect.bottom - 12;
         const spaceAbove = rect.top - 12;
 
@@ -246,7 +247,7 @@ export function SelectStub({
                         width: `${coords.width}px`,
                         zIndex: 99999,
                     }}
-                    className="py-1 rounded-xl border border-zinc-700/80 bg-zinc-900/98 backdrop-blur-md shadow-2xl shadow-black/90 select-none overflow-hidden"
+                    className="py-1 rounded-xl border border-zinc-700/80 bg-zinc-900/98 backdrop-blur-md shadow-2xl shadow-black/90 select-none overflow-y-auto max-h-72"
                 >
                     {options.map(([optVal, optLabel, optDisabled]) => {
                         const isSelected = optVal === value;

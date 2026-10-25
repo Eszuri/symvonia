@@ -1,5 +1,7 @@
 'use client';
 
+import {useState, useRef} from 'react';
+import {SelectStub} from './controls';
 import {type Lang} from '../../lib/translations';
 
 
@@ -432,23 +434,173 @@ const changelogId = [
 ];
 
 
+function getPageNumbers(currentPage: number, totalPages: number): (number | '...')[] {
+    if (totalPages <= 7) {
+        return Array.from({length: totalPages}, (_, i) => i + 1);
+    }
+    const pages: (number | '...')[] = [1];
+    if (currentPage > 3) {
+        pages.push('...');
+    }
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i++) {
+        pages.push(i);
+    }
+    if (currentPage < totalPages - 2) {
+        pages.push('...');
+    }
+    pages.push(totalPages);
+    return pages;
+}
+
 export default function ChangelogSection({lang}: {lang: Lang}) {
     const data = lang === 'id' ? changelogId : changelogEn;
+    const [isAll, setIsAll] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const topRef = useRef<HTMLDivElement>(null);
+
+    const isId = lang === 'id';
+    const totalPages = Math.max(1, data.length);
+    const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+    const currentRelease = data[safeCurrentPage - 1];
+
+    const pageNumbers = getPageNumbers(safeCurrentPage, totalPages);
+
+    const selectOptions: [string, string][] = [
+        ['all', isId ? 'Semua Versi' : 'All Versions'],
+        ...data.map((release, idx) => [
+            release.version,
+            `v${release.version}${idx === 0 ? (isId ? ' (Terbaru)' : ' (Latest)') : ''}`,
+        ] as [string, string]),
+    ];
+
+    const handleSelectChange = (val: string) => {
+        if (val === 'all') {
+            setIsAll(true);
+        } else {
+            setIsAll(false);
+            const idx = data.findIndex((r) => r.version === val);
+            if (idx !== -1) {
+                setCurrentPage(idx + 1);
+            }
+        }
+        if (topRef.current) {
+            topRef.current.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+    };
+
+    const handlePageChange = (page: number) => {
+        setIsAll(false);
+        setCurrentPage(page);
+        if (topRef.current) {
+            topRef.current.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+    };
+
+    const displayedReleases = isAll ? data : (currentRelease ? [currentRelease] : []);
+
     return (
-        <div className="space-y-5">
-            {data.map((release) => (
-                <div key={release.version} className="bg-zinc-900/60 rounded-xl border border-zinc-800/60 p-4">
-                    <h4 className="text-sm font-semibold text-green-400 mb-2">v{release.version}</h4>
-                    <ul className="space-y-1.5">
-                        {release.items.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-zinc-300">
-                                <span className="text-green-500/70 mt-0.5 shrink-0">•</span>
-                                <span>{item}</span>
-                            </li>
-                        ))}
-                    </ul>
+        <div ref={topRef} className="space-y-4">
+            {/* Header: Dropdown */}
+            <div className="flex items-center justify-end gap-2 pb-3 border-b border-zinc-800/80">
+                <span className="text-xs text-zinc-400 select-none">
+                    {isId ? 'Tampilan:' : 'View:'}
+                </span>
+                <SelectStub
+                    options={selectOptions}
+                    value={isAll ? 'all' : (currentRelease?.version || '')}
+                    onChange={handleSelectChange}
+                    accentColor="emerald"
+                    ariaLabel={isId ? 'Pilih versi atau tampilkan semua versi' : 'Select version or show all versions'}
+                    className="w-48 sm:w-52"
+                />
+            </div>
+
+            {/* Pagination Controls at the Top */}
+            {!isAll && totalPages > 1 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-800/80 select-none">
+                    <button
+                        type="button"
+                        onClick={() => handlePageChange(safeCurrentPage - 1)}
+                        disabled={safeCurrentPage === 1}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                        title={isId ? 'Versi lebih baru' : 'Newer version'}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                        <span>{isId ? 'Sebelumnya' : 'Previous'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                        {pageNumbers.map((p, idx) =>
+                            p === '...' ? (
+                                <span key={`dots-${idx}`} className="px-1.5 text-xs text-zinc-600 select-none">
+                                    …
+                                </span>
+                            ) : (
+                                <button
+                                    key={p}
+                                    type="button"
+                                    onClick={() => handlePageChange(p)}
+                                    className={`min-w-8 h-8 px-2 flex items-center justify-center rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                                        p === safeCurrentPage
+                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-semibold shadow-xs'
+                                            : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                                    }`}
+                                    aria-current={p === safeCurrentPage ? 'page' : undefined}
+                                >
+                                    {p}
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => handlePageChange(safeCurrentPage + 1)}
+                        disabled={safeCurrentPage === totalPages}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                        title={isId ? 'Versi lebih lama' : 'Older version'}
+                    >
+                        <span>{isId ? 'Berikutnya' : 'Next'}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                    </button>
                 </div>
-            ))}
+            )}
+
+            {/* Releases List */}
+            <div className="space-y-4">
+                {displayedReleases.map((release) => {
+                    const isLatest = release.version === data[0]?.version;
+                    return (
+                        <div
+                            key={release.version}
+                            className="bg-zinc-900/60 rounded-xl border border-zinc-800/60 p-4 transition-colors hover:border-zinc-700/60"
+                        >
+                            <div className="flex items-center justify-between gap-2 mb-2.5">
+                                <h4 className="text-sm font-semibold text-green-400">v{release.version}</h4>
+                                {isLatest && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">
+                                        {isId ? 'Terbaru' : 'Latest'}
+                                    </span>
+                                )}
+                            </div>
+                            <ul className="space-y-1.5">
+                                {release.items.map((item, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-xs text-zinc-300">
+                                        <span className="text-green-500/70 mt-0.5 shrink-0">•</span>
+                                        <span className="leading-relaxed">{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
