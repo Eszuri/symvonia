@@ -36,6 +36,9 @@ pub struct MfDecoder {
     eof: bool,
     fade_in_frames_total: u32,
     fade_in_frames_remaining: u32,
+    fade_out_frames_total: u32,
+    fade_out_frames_remaining: u32,
+    fade_out_active: bool,
 }
 
 impl MfDecoder {
@@ -140,6 +143,9 @@ impl MfDecoder {
                 eof: false,
                 fade_in_frames_total: 0,
                 fade_in_frames_remaining: 0,
+                fade_out_frames_total: 0,
+                fade_out_frames_remaining: 0,
+                fade_out_active: false,
             };
 
             if let Some(start) = start_at_secs {
@@ -264,10 +270,24 @@ impl MfDecoder {
     }
 
     pub fn arm_fade_in(&mut self) {
-        // ~15ms smooth fade-in ramp to suppress post-seek / post-resume transients & clicks
-        let ramp_frames = (self.sample_rate / 65).max(64);
+        // ~20ms smooth fade-in ramp to suppress post-seek / post-resume transients & clicks
+        let ramp_frames = (self.sample_rate / 50).max(64);
         self.fade_in_frames_total = ramp_frames;
         self.fade_in_frames_remaining = ramp_frames;
+        self.fade_out_active = false;
+        self.fade_out_frames_remaining = 0;
+    }
+
+    pub fn arm_fade_out(&mut self) {
+        let ramp_frames = (self.sample_rate / 50).max(64);
+        self.fade_out_frames_total = ramp_frames;
+        self.fade_out_frames_remaining = ramp_frames;
+        self.fade_out_active = true;
+        self.fade_in_frames_remaining = 0;
+    }
+
+    pub fn fade_out_done(&self) -> bool {
+        self.fade_out_active && self.fade_out_frames_remaining == 0
     }
 
     pub fn position_secs(&self) -> f64 {
@@ -291,6 +311,13 @@ impl MfDecoder {
     pub fn read_samples(&mut self, out: &mut [f32]) -> Result<usize, String> {
         let mut written = 0;
         let ch = self.channels as usize;
+
+        let out: &mut [f32] = if self.fade_out_active {
+            let max = (self.fade_out_frames_remaining as usize * ch).min(out.len());
+            &mut out[..max]
+        } else {
+            out
+        };
 
         while written < out.len() {
             let avail = self.residual.len().saturating_sub(self.residual_pos);
@@ -331,6 +358,21 @@ impl MfDecoder {
                 }
                 self.fade_in_frames_remaining = self
                     .fade_in_frames_remaining
+                    .saturating_sub(to_ramp as u32);
+            }
+            if self.fade_out_active && self.fade_out_frames_total > 0 {
+                let total = self.fade_out_frames_total as f32;
+                let to_ramp = frames_written.min(self.fade_out_frames_remaining as usize);
+                for f in 0..to_ramp {
+                    let left = self.fade_out_frames_remaining as f32 - f as f32;
+                    let gain = ((left - 1.0) / total).clamp(0.0, 1.0);
+                    let base = f * ch;
+                    for c in 0..ch {
+                        out[base + c] *= gain;
+                    }
+                }
+                self.fade_out_frames_remaining = self
+                    .fade_out_frames_remaining
                     .saturating_sub(to_ramp as u32);
             }
             self.current_frame += frames_written as u64;

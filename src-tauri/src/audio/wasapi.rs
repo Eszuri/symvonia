@@ -434,15 +434,6 @@ impl WasapiOutput {
         let total_samples = frames_to_write as usize * ch;
         scratch.resize(total_samples, 0.0);
 
-        let samples_read = fill_fn(&mut scratch[..total_samples])?;
-        if samples_read == 0 {
-            return Ok(0);
-        }
-
-        if samples_read < total_samples {
-            scratch[samples_read..total_samples].fill(0.0);
-        }
-
         unsafe {
             let dst_ptr = match self.render_client.GetBuffer(frames_to_write) {
                 Ok(ptr) => ptr,
@@ -460,6 +451,18 @@ impl WasapiOutput {
             let bytes_per_sample = self.sample_format.container_bytes_per_sample() as usize;
             let total_bytes = total_samples * bytes_per_sample;
             let dst_bytes = std::slice::from_raw_parts_mut(dst_ptr, total_bytes);
+
+            let samples_read = match fill_fn(&mut scratch[..total_samples]) {
+                Ok(n) => n,
+                Err(e) => {
+                    dst_bytes.fill(0);
+                    let _ = self.render_client.ReleaseBuffer(frames_to_write, 0);
+                    return Err(e);
+                }
+            };
+            if samples_read < total_samples {
+                scratch[samples_read..total_samples].fill(0.0);
+            }
 
             pack_samples(&scratch[..total_samples], volume, self.sample_format, dst_bytes);
 

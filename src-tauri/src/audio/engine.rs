@@ -178,6 +178,7 @@ struct AudioWorker {
     scratch: Vec<f32>,
     last_progress_emit: Instant,
     draining_eof: bool,
+    pausing: bool,
 }
 
 #[cfg(windows)]
@@ -191,6 +192,7 @@ impl AudioWorker {
             scratch: Vec::with_capacity(8192),
             last_progress_emit: Instant::now(),
             draining_eof: false,
+            pausing: false,
         }
     }
 
@@ -287,6 +289,7 @@ impl AudioWorker {
         }
         self.state = PlaybackState::Stopped;
         self.draining_eof = false;
+        self.pausing = false;
     }
 
     fn handle_json(&mut self, json_line: &str) -> bool {
@@ -530,21 +533,24 @@ impl AudioWorker {
     }
 
     fn cmd_pause(&mut self) {
-        if self.state == PlaybackState::Playing {
-            // Keep WASAPI IAudioClient running and feed silent frames in pump_audio
-            // (matching NAudio PausableSampleProvider) so Exclusive/Shared DMA event
-            // signaling is never interrupted by Stop()/Start().
-            self.state = PlaybackState::Paused;
+        if self.state == PlaybackState::Playing && !self.pausing {
+            if let Some(ref mut s) = self.session {
+                s.decoder.arm_fade_out();
+                self.pausing = true;
+            } else {
+                self.state = PlaybackState::Paused;
+            }
         }
         self.emit_current_state(Some("paused"));
         self.emit_current_progress();
     }
 
     fn cmd_resume(&mut self) {
-        if self.state == PlaybackState::Paused {
+        if self.state == PlaybackState::Paused || self.pausing {
             if let Some(ref mut s) = self.session {
                 s.decoder.arm_fade_in();
             }
+            self.pausing = false;
             self.state = PlaybackState::Playing;
             self.last_progress_emit = Instant::now();
         }
@@ -604,6 +610,11 @@ impl AudioWorker {
                 return;
             }
             self.draining_eof = false;
+        }
+
+        if self.pausing {
+            self.pausing = false;
+            self.state = PlaybackState::Paused;
         }
 
         self.last_progress_emit = Instant::now();
@@ -733,6 +744,11 @@ impl AudioWorker {
 
             match write_res {
                 Ok(_frames_written) => {
+                    if self.pausing && s.decoder.fade_out_done() {
+                        self.pausing = false;
+                        self.state = PlaybackState::Paused;
+                        return;
+                    }
                     if s.decoder.is_eof() {
                         self.draining_eof = true;
                     }
