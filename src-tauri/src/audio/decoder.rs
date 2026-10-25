@@ -22,6 +22,9 @@ enum DecodedSampleFormat {
 
 pub struct MfDecoder {
     reader: IMFSourceReader,
+    path: String,
+    target_rate: Option<u32>,
+    target_channels: Option<u16>,
     pub sample_rate: u32,
     pub channels: u16,
     pub source_bits_per_sample: Option<u16>,
@@ -31,6 +34,8 @@ pub struct MfDecoder {
     residual_pos: usize,
     current_frame: u64,
     eof: bool,
+    fade_in_frames_total: u32,
+    fade_in_frames_remaining: u32,
 }
 
 impl MfDecoder {
@@ -121,6 +126,9 @@ impl MfDecoder {
 
             let mut decoder = Self {
                 reader,
+                path: path.to_string(),
+                target_rate,
+                target_channels,
                 sample_rate,
                 channels,
                 source_bits_per_sample,
@@ -130,6 +138,8 @@ impl MfDecoder {
                 residual_pos: 0,
                 current_frame: 0,
                 eof: false,
+                fade_in_frames_total: 0,
+                fade_in_frames_remaining: 0,
             };
 
             if let Some(start) = start_at_secs {
@@ -194,21 +204,70 @@ impl MfDecoder {
         let hns = (clamped * 10_000_000.0) as i64;
 
         unsafe {
-            let first_audio = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
-            let _ = self.reader.Flush(first_audio);
+            let url = HSTRING::from(self.path.as_str());
+            if let Ok(new_reader) = MFCreateSourceReaderFromURL(&url, None) {
+                let all_streams = MF_SOURCE_READER_ALL_STREAMS.0 as u32;
+                let first_audio = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
+                let _ = new_reader.SetStreamSelection(all_streams, false);
+                if new_reader.SetStreamSelection(first_audio, true).is_ok() {
+                    let fmt_ok = if Self::configure_output_subtype(
+                        &new_reader,
+                        first_audio,
+                        &MFAudioFormat_Float,
+                        self.target_rate,
+                        self.target_channels,
+                    )
+                    .is_ok()
+                    {
+                        self.sample_format = DecodedSampleFormat::Float32;
+                        true
+                    } else {
+                        Self::configure_output_subtype(
+                            &new_reader,
+                            first_audio,
+                            &MFAudioFormat_PCM,
+                            self.target_rate,
+                            self.target_channels,
+                        )
+                        .is_ok()
+                    };
+                    if fmt_ok {
+                        self.reader = new_reader;
+                        self.residual.clear();
+                        self.residual_pos = 0;
+                        self.eof = false;
+                        self.current_frame = 0;
+                        self.fade_in_frames_remaining = 0;
+                        if hns > 0 {
+                            let mut warmup = vec![0.0f32; self.channels as usize];
+                            let _ = self.read_samples(&mut warmup);
+                        }
+                    }
+                }
+            }
 
-            let var = PROPVARIANT::from(hns);
-
-            self.reader
-                .SetCurrentPosition(&GUID::zeroed(), &var)
-                .map_err(|e| format!("Failed to seek audio stream: {}", e))?;
+            if hns > 0 {
+                let var = PROPVARIANT::from(hns);
+                self.reader
+                    .SetCurrentPosition(&GUID::zeroed(), &var)
+                    .map_err(|e| format!("Failed to seek audio stream: {}", e))?;
+            }
         }
 
         self.residual.clear();
         self.residual_pos = 0;
         self.eof = false;
         self.current_frame = (clamped * self.sample_rate as f64) as u64;
+        self.arm_fade_in();
+        let _ = self.decode_next_packet();
         Ok(())
+    }
+
+    pub fn arm_fade_in(&mut self) {
+        // ~15ms smooth fade-in ramp to suppress post-seek / post-resume transients & clicks
+        let ramp_frames = (self.sample_rate / 65).max(64);
+        self.fade_in_frames_total = ramp_frames;
+        self.fade_in_frames_remaining = ramp_frames;
     }
 
     pub fn position_secs(&self) -> f64 {
@@ -258,7 +317,23 @@ impl MfDecoder {
         }
 
         if ch > 0 {
-            self.current_frame += (written / ch) as u64;
+            let frames_written = written / ch;
+            if self.fade_in_frames_remaining > 0 && self.fade_in_frames_total > 0 {
+                let total = self.fade_in_frames_total as f32;
+                let to_ramp = frames_written.min(self.fade_in_frames_remaining as usize);
+                for f in 0..to_ramp {
+                    let progressed = (self.fade_in_frames_total - self.fade_in_frames_remaining) as f32 + f as f32;
+                    let gain = (progressed / total).clamp(0.0, 1.0);
+                    let base = f * ch;
+                    for c in 0..ch {
+                        out[base + c] *= gain;
+                    }
+                }
+                self.fade_in_frames_remaining = self
+                    .fade_in_frames_remaining
+                    .saturating_sub(to_ramp as u32);
+            }
+            self.current_frame += frames_written as u64;
         }
 
         Ok(written)
@@ -268,6 +343,7 @@ impl MfDecoder {
         let first_audio = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
 
         unsafe {
+            let mut empty_retries = 0u32;
             loop {
                 let mut flags: u32 = 0;
                 let mut timestamp: i64 = 0;
@@ -305,10 +381,29 @@ impl MfDecoder {
                                 self.channels = ch as u16;
                             }
                         }
+                        if let Ok(sub) = mt.GetGUID(&MF_MT_SUBTYPE) {
+                            if sub == MFAudioFormat_Float {
+                                self.sample_format = DecodedSampleFormat::Float32;
+                            } else if sub == MFAudioFormat_PCM {
+                                let bits = mt.GetUINT32(&MF_MT_AUDIO_BITS_PER_SAMPLE).unwrap_or(16);
+                                self.sample_format = match bits {
+                                    24 => DecodedSampleFormat::Pcm24,
+                                    32 => DecodedSampleFormat::Pcm32,
+                                    _ => DecodedSampleFormat::Pcm16,
+                                };
+                            }
+                        }
                     }
                 }
 
                 let Some(sample) = sample_opt else {
+                    empty_retries += 1;
+                    if empty_retries > 64 {
+                        return Err(format!(
+                            "Media Foundation returned >64 empty packets (flags=0x{:x})",
+                            flags
+                        ));
+                    }
                     continue;
                 };
 
@@ -381,6 +476,14 @@ impl MfDecoder {
                     let s = i32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
                     self.residual.push(s as f32 / 2_147_483_648.0);
                 }
+            }
+        }
+
+        let ch = self.channels as usize;
+        if ch > 1 {
+            let rem = self.residual.len() % ch;
+            if rem != 0 {
+                self.residual.truncate(self.residual.len() - rem);
             }
         }
     }

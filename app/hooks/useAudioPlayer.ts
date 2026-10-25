@@ -314,14 +314,16 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 const wasPlaying = isPlaying || nativePlayingRef.current;
                 const gen = ++playbackGenerationRef.current;
 
+                if (!wasPlaying) {
+                    nativeStateRef.current = "stopped";
+                    bpSendCommandRef.current({command: "stop"}).catch(() => {});
+                    return;
+                }
+
                 Promise.resolve().then(() => {
                     if (isMountedRef.current) setAudioBusy(true);
                 });
-                enginePlayRef.current(currentSong, curPos, gen).then(() => {
-                    if (!wasPlaying) {
-                        bpSendCommandRef.current({command: "pause"}).catch(() => {});
-                    }
-                }).catch((err) => {
+                enginePlayRef.current(currentSong, curPos, gen).catch((err) => {
                     console.error("[Symvonia] Failed to switch output device on the fly:", err);
                 }).finally(() => {
                     if (isMountedRef.current) setAudioBusy(false);
@@ -809,11 +811,35 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                 pauseRequestedRef.current = false;
                 const song = selectedSongRef.current;
                 if (nativeStateRef.current === 'paused') {
-                    bpSendCommandRef.current({command: "resume"}).catch(() => {});
                     setIsPlaying(true);
                     nativePlayingRef.current = true;
                     nativeStateRef.current = "playing";
                     setRuntimeStatus('playing');
+                    const generation = playbackGenerationRef.current;
+                    const resumeNative = async () => {
+                        let resumeVolume: number | null = null;
+                        if (pauseIfMuted && isVolumeSilent()) {
+                            resumeVolume = await setMinimumResumeVolume();
+                        }
+                        if (generation !== playbackGenerationRef.current || pauseRequestedRef.current) return;
+                        autoPausedBySilenceRef.current = false;
+                        if (resumeVolume !== null) {
+                            const isExclusive = nativeEngineModeRef.current === "exclusive";
+                            const targetVol = (isExclusive || volumeModeRef.current === "app") ? resumeVolume : 1;
+                            await bpSendCommandRef.current({
+                                command: "set_volume",
+                                volume: targetVol,
+                            }).catch(() => {});
+                        }
+                        await bpSendCommandRef.current({command: "resume"});
+                    };
+                    resumeNative().catch((error: unknown) => {
+                        if (generation !== playbackGenerationRef.current || pauseRequestedRef.current) return;
+                        setIsPlaying(false);
+                        nativePlayingRef.current = false;
+                        setRuntimeStatus('error');
+                        setRuntimeError({code: 'PLAYBACK_FAILED', message: String(error)});
+                    });
                 } else {
                     playSong(song, currentTimeRef.current > 0 ? currentTimeRef.current : 0);
                 }
@@ -993,10 +1019,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             if (!Number.isFinite(e.position) || !Number.isFinite(e.duration)) return;
             if (e.duration > 0) setDuration(e.duration);
             if (nativeStateRef.current === 'paused' || !nativePlayingRef.current) return;
-            if (
-                Date.now() - lastNativeSeekAtRef.current < 350 &&
-                Math.abs(e.position - currentTimeRef.current) > 0.75
-            ) {
+            if (Date.now() - lastNativeSeekAtRef.current < 350) {
                 return;
             }
             setCurrentTime(Math.max(0, e.position));
@@ -1068,7 +1091,7 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
                     saveSessionState(null);
                     const song = selectedSongRef.current;
                     if (repeatRef.current === "one" && song) {
-                        enginePlayRef.current(song).catch(() => {});
+                        playSong(song, 0).catch(() => {});
                     } else {
                         playNextRef.current();
                     }
@@ -1339,6 +1362,9 @@ export function useAudioPlayer(options: UseAudioPlayerOptions) {
             });
         }
         if (nativeEngineActiveRef.current) {
+            if (nativeStateRef.current !== "playing" && nativeStateRef.current !== "paused") {
+                return;
+            }
             pendingNativeSeekPosRef.current = clamped;
             const elapsed = now - lastNativeSeekSentAtRef.current;
             if (elapsed >= 60) {

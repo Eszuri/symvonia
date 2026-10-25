@@ -160,7 +160,6 @@ struct ActiveSession {
     generation: Option<i64>,
     sample_rate: u32,
     bit_depth: Option<u32>,
-    needs_prefill_on_resume: bool,
 }
 
 #[cfg(windows)]
@@ -522,19 +521,19 @@ impl AudioWorker {
             generation: gen_id,
             sample_rate,
             bit_depth,
-            needs_prefill_on_resume: false,
         });
         self.state = PlaybackState::Playing;
         self.draining_eof = false;
         self.last_progress_emit = Instant::now();
         self.emit_current_state(Some("playing"));
+        self.emit_current_progress();
     }
 
     fn cmd_pause(&mut self) {
         if self.state == PlaybackState::Playing {
-            if let Some(ref mut s) = self.session {
-                s.output.stop();
-            }
+            // Keep WASAPI IAudioClient running and feed silent frames in pump_audio
+            // (matching NAudio PausableSampleProvider) so Exclusive/Shared DMA event
+            // signaling is never interrupted by Stop()/Start().
             self.state = PlaybackState::Paused;
         }
         self.emit_current_state(Some("paused"));
@@ -543,31 +542,8 @@ impl AudioWorker {
 
     fn cmd_resume(&mut self) {
         if self.state == PlaybackState::Paused {
-            let vol = self.volume;
             if let Some(ref mut s) = self.session {
-                if s.needs_prefill_on_resume {
-                    let init_frames = s.output.buffer_frames;
-                    let _ = s.output.write_frames(init_frames, vol, &mut self.scratch, |buf| {
-                        s.decoder.read_samples(buf)
-                    });
-                    s.needs_prefill_on_resume = false;
-                }
-                if let Err(e) = s.output.start() {
-                    let mode = s.mode.clone();
-                    let path = s.path.clone();
-                    let req_id = s.request_id.clone();
-                    let gen_id = s.generation;
-                    self.emit_error(
-                        "PLAYBACK_FAILED",
-                        &e,
-                        Some("resume"),
-                        Some(&mode),
-                        Some(&path),
-                        req_id.as_deref(),
-                        gen_id,
-                    );
-                    return;
-                }
+                s.decoder.arm_fade_in();
             }
             self.state = PlaybackState::Playing;
             self.last_progress_emit = Instant::now();
@@ -607,12 +583,10 @@ impl AudioWorker {
             return;
         };
 
-        let was_playing = self.state == PlaybackState::Playing;
-
         if let Some(ref mut s) = self.session {
-            if !was_playing {
-                s.output.reset();
-            }
+            // Do NOT stop or reset WasapiOutput during seek; keep the hardware DMA clock
+            // and event loop uninterrupted and simply reposition the decoder with a smooth
+            // 15ms fade-in ramp.
             if let Err(e) = s.decoder.seek(pos) {
                 let mode = s.mode.clone();
                 let path = s.path.clone();
@@ -630,10 +604,6 @@ impl AudioWorker {
                 return;
             }
             self.draining_eof = false;
-
-            if !was_playing {
-                s.needs_prefill_on_resume = true;
-            }
         }
 
         self.last_progress_emit = Instant::now();
@@ -677,7 +647,7 @@ impl AudioWorker {
     }
 
     fn pump_audio(&mut self) {
-        if self.state != PlaybackState::Playing {
+        if self.state == PlaybackState::Stopped {
             return;
         }
 
@@ -688,9 +658,20 @@ impl AudioWorker {
 
         let signaled = s.output.wait_for_buffer(20);
         if !signaled && s.output.exclusive {
-            if self.last_progress_emit.elapsed() >= Duration::from_millis(100) {
+            if self.state == PlaybackState::Playing
+                && self.last_progress_emit.elapsed() >= Duration::from_millis(100)
+            {
                 self.last_progress_emit = Instant::now();
                 self.emit_current_progress();
+            }
+            return;
+        }
+
+        if self.state == PlaybackState::Paused {
+            if let Ok(available) = s.output.available_frames() {
+                if available > 0 {
+                    let _ = s.output.write_silence(available);
+                }
             }
             return;
         }
@@ -796,7 +777,7 @@ fn run_worker_loop(app: AppHandle, rx: Receiver<WorkerMsg>) {
         let mut worker = AudioWorker::new(app.clone());
 
         loop {
-            if worker.state == PlaybackState::Playing {
+            if worker.state != PlaybackState::Stopped {
                 // Drain all queued commands non-blockingly, coalescing consecutive seek commands
                 let mut keep_running = true;
                 let mut pending_seek: Option<String> = None;
@@ -835,7 +816,7 @@ fn run_worker_loop(app: AppHandle, rx: Receiver<WorkerMsg>) {
                 }
                 worker.pump_audio();
             } else {
-                // Idle or paused: block until a command arrives (0% CPU usage)
+                // Stopped: block until a command arrives (0% CPU usage)
                 match rx.recv() {
                     Ok(WorkerMsg::Command(json)) => {
                         if !worker.handle_json(&json) {
@@ -1055,11 +1036,249 @@ mod tests {
         assert!((decoder.position_secs() - 0.25).abs() < 0.05);
         let n3 = decoder.read_samples(&mut buf).expect("read after backward seek");
         assert!(n3 > 0);
+        // First sample after seek must start at 0.0 due to the 15ms fade-in ramp
+        assert_eq!(buf[0], 0.0);
+
+        // Arm fade-in (as done on resume from pause) and verify smooth ramp
+        decoder.arm_fade_in();
+        let n4 = decoder.read_samples(&mut buf).expect("read after resume fade-in");
+        assert!(n4 > 0);
+        assert_eq!(buf[0], 0.0);
+
+        // Seek a 3rd time to 1.5s
+        decoder.seek(1.5).expect("seek to 1.5s");
+        assert!((decoder.position_secs() - 1.5).abs() < 0.05);
+        let n5 = decoder.read_samples(&mut buf).expect("read after 3rd seek");
+        assert!(n5 > 0);
 
         // Seek right to the end (2.0s)
         decoder.seek(2.0).expect("seek to end");
         let _ = decoder.read_samples(&mut buf).expect("read near eof");
 
+        for &exclusive in &[false, true] {
+            decoder.seek(0.0).expect("reset decoder to 0.0");
+            if let Ok(mut output) = WasapiOutput::open(
+                None,
+                exclusive,
+                decoder.sample_rate,
+                decoder.channels,
+            ) {
+                let mut scratch = Vec::with_capacity(8192);
+                let init_frames = output.buffer_frames;
+                if output
+                    .write_frames(init_frames, 0.0, &mut scratch, |b| decoder.read_samples(b))
+                    .is_err()
+                {
+                    continue;
+                }
+                if output.start().is_err() {
+                    continue;
+                }
+
+                for _ in 0..4 {
+                    let signaled = output.wait_for_buffer(50);
+                    if !signaled && output.exclusive {
+                        continue;
+                    }
+                    let avail = output.available_frames().expect("available_frames playing");
+                    if avail > 0 {
+                        output
+                            .write_frames(avail, 0.0, &mut scratch, |b| decoder.read_samples(b))
+                            .expect("write_frames playing");
+                    }
+                }
+                let pos_before_pause = decoder.position_secs();
+                assert!(pos_before_pause > 0.0);
+
+                for _ in 0..4 {
+                    let signaled = output.wait_for_buffer(50);
+                    if !signaled && output.exclusive {
+                        continue;
+                    }
+                    let avail = output.available_frames().expect("available_frames paused");
+                    if avail > 0 {
+                        output
+                            .write_silence(avail)
+                            .expect("write_silence while paused");
+                    }
+                }
+                assert_eq!(decoder.position_secs(), pos_before_pause);
+
+                decoder.arm_fade_in();
+                for _ in 0..4 {
+                    let signaled = output.wait_for_buffer(50);
+                    if !signaled && output.exclusive {
+                        continue;
+                    }
+                    let avail = output.available_frames().expect("available_frames resumed");
+                    if avail > 0 {
+                        output
+                            .write_frames(avail, 0.0, &mut scratch, |b| decoder.read_samples(b))
+                            .expect("write_frames resumed");
+                    }
+                }
+                assert!(decoder.position_secs() > pos_before_pause);
+
+                for &target in &[1.2, 0.3, 1.5] {
+                    decoder.seek(target).expect("seek while playing");
+                    for _ in 0..3 {
+                        let signaled = output.wait_for_buffer(50);
+                        if !signaled && output.exclusive {
+                            continue;
+                        }
+                        let avail = output
+                            .available_frames()
+                            .expect("available_frames after seek");
+                        if avail > 0 {
+                            output
+                                .write_frames(avail, 0.0, &mut scratch, |b| decoder.read_samples(b))
+                                .expect("write_frames after seek");
+                        }
+                    }
+                    assert!(decoder.position_secs() > target);
+                }
+
+                output.stop();
+            }
+        }
+
         let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn flac_seek_and_wasapi_pump_works_cleanly() {
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        fn crc8(data: &[u8]) -> u8 {
+            let mut crc: u8 = 0;
+            for &b in data {
+                crc ^= b;
+                for _ in 0..8 {
+                    if (crc & 0x80) != 0 {
+                        crc = (crc << 1) ^ 0x07;
+                    } else {
+                        crc <<= 1;
+                    }
+                }
+            }
+            crc
+        }
+
+        fn crc16(data: &[u8]) -> u16 {
+            let mut crc: u16 = 0;
+            for &b in data {
+                crc ^= (b as u16) << 8;
+                for _ in 0..8 {
+                    if (crc & 0x8000) != 0 {
+                        crc = (crc << 1) ^ 0x8005;
+                    } else {
+                        crc <<= 1;
+                    }
+                }
+            }
+            crc
+        }
+
+        let sample_rate: u32 = 44100;
+        let block_size: u16 = 4096;
+        let num_blocks: u32 = 22; // ~2.04 seconds
+        let total_samples: u64 = (block_size as u64) * (num_blocks as u64);
+
+        let mut flac = Vec::new();
+        flac.extend_from_slice(b"fLaC");
+        flac.push(0x80);
+        flac.extend_from_slice(&[0, 0, 34]);
+        flac.extend_from_slice(&block_size.to_be_bytes());
+        flac.extend_from_slice(&block_size.to_be_bytes());
+        flac.extend_from_slice(&[0; 6]);
+        let sr_ch_bps_ts: u64 = ((sample_rate as u64) << 44)
+            | (1u64 << 41) // 2 channels -> 1
+            | (15u64 << 36) // 16 bits -> 15
+            | (total_samples & 0x0F_FFFF_FFFF);
+        flac.extend_from_slice(&sr_ch_bps_ts.to_be_bytes());
+        flac.extend_from_slice(&[0; 16]);
+
+        for blk in 0..num_blocks {
+            let frame_start = flac.len();
+            flac.push(0xFF);
+            flac.push(0xF8);
+            // blocksize=4096 (0b1100 = 12), sample_rate=44100 (0b1001 = 9) -> 0xC9
+            flac.push(0xC9);
+            flac.push(0x18);
+            flac.push(blk as u8);
+            let c8 = crc8(&flac[frame_start..]);
+            flac.push(c8);
+
+            for ch in 0..2u16 {
+                flac.push(0x02);
+                for s in 0..block_size {
+                    let val: i16 = (((s as i32 + blk as i32 * 17 + ch as i32 * 7) % 200) - 100) as i16 * 120;
+                    flac.extend_from_slice(&val.to_be_bytes());
+                }
+            }
+
+            let c16 = crc16(&flac[frame_start..]);
+            flac.extend_from_slice(&c16.to_be_bytes());
+        }
+
+        let flac_path = std::env::temp_dir().join("symvonia_synthetic_test.flac");
+        std::fs::write(&flac_path, &flac).expect("write synthetic flac");
+        let flac_str = flac_path.to_string_lossy().to_string();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+        let flac_str_clone = flac_str.clone();
+        std::thread::spawn(move || {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            }
+            let mut dec = MfDecoder::open(&flac_str_clone, None).expect("open synthetic flac");
+            let mut buf = vec![0.0f32; 4096];
+            let r0 = dec.read_samples(&mut buf).expect("initial flac read");
+            assert!(r0 > 0);
+
+            for &pos in &[1.0, 0.2, 1.5, 0.5, 1.8, 0.1, 0.9] {
+                println!("Calling dec.seek({})...", pos);
+                if let Err(e) = dec.seek(pos) {
+                    let _ = done_tx.send(Err(format!("seek({}) failed: {}", pos, e)));
+                    return;
+                }
+                println!("dec.seek({}) returned, calling read_samples...", pos);
+                match dec.read_samples(&mut buf) {
+                    Ok(rn) => {
+                        println!(
+                            "Synthetic FLAC seek({}) -> rn={}, pos={}, eof={}",
+                            pos,
+                            rn,
+                            dec.position_secs(),
+                            dec.is_eof()
+                        );
+                        if rn == 0 {
+                            let _ = done_tx.send(Err(format!("0 samples at {}", pos)));
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = done_tx.send(Err(format!("read_samples({}) failed: {}", pos, e)));
+                        return;
+                    }
+                }
+            }
+            dec.seek(1.4).expect("rapid seek 1");
+            dec.seek(0.3).expect("rapid seek 2");
+            dec.seek(0.4).expect("small forward seek within read-ahead window");
+            let rn = dec.read_samples(&mut buf).expect("read after rapid seeks");
+            assert!(rn > 0);
+            let _ = done_tx.send(Ok(()));
+        });
+
+        let res = done_rx
+            .recv_timeout(Duration::from_secs(3))
+            .expect("FLAC seek timed out (>3s hang in Media Foundation!)");
+        let _ = std::fs::remove_file(&flac_path);
+        res.expect("FLAC seek test failed");
     }
 }

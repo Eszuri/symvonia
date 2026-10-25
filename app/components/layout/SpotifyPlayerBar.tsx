@@ -260,7 +260,8 @@ export default function SpotifyPlayerBar({
                             type="range"
                             min="0"
                             max={duration || 0}
-                            value={currentTime}
+                            step="0.1"
+                            value={safeTime}
                             onChange={handleSeek}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                         />
