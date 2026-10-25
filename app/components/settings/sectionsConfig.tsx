@@ -23,29 +23,6 @@ export function getSections(lang: Lang): SectionDef[] {
             ),
         },
         {
-            id: 'audio',
-            label: t(lang, 'sections.audio'),
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 14v-3a9 9 0 0 1 18 0v3" />
-                    <path d="M2 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3a1 1 0 0 0-1 1z" />
-                    <path d="M22 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h2a1 1 0 0 1 1 1z" />
-                </svg>
-            ),
-        },
-        {
-            id: 'wallpaper',
-            label: t(lang, 'sections.wallpaper') || 'Wallpaper Engine',
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect width="20" height="14" x="2" y="3" rx="2"/>
-                    <line x1="8" x2="16" y1="21" y2="21"/>
-                    <line x1="12" x2="12" y1="17" y2="21"/>
-                </svg>
-            ),
-        },
-
-        {
             id: 'sort',
             label: t(lang, 'sections.sort'),
             icon: (
@@ -129,6 +106,28 @@ export function getSections(lang: Lang): SectionDef[] {
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect width="7" height="7" x="14" y="3" rx="1"/>
                     <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>
+                </svg>
+            ),
+        },
+        {
+            id: 'audio',
+            label: t(lang, 'sections.audio'),
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 14v-3a9 9 0 0 1 18 0v3" />
+                    <path d="M2 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3a1 1 0 0 0-1 1z" />
+                    <path d="M22 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h2a1 1 0 0 1 1 1z" />
+                </svg>
+            ),
+        },
+        {
+            id: 'wallpaper',
+            label: t(lang, 'sections.wallpaper') || 'Wallpaper Engine',
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="20" height="14" x="2" y="3" rx="2"/>
+                    <line x1="8" x2="16" y1="21" y2="21"/>
+                    <line x1="12" x2="12" y1="17" y2="21"/>
                 </svg>
             ),
         },
